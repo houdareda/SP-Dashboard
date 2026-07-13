@@ -1,26 +1,466 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Default Theme Configuration (Dark Mode, Purple Accent, Shade 1) */
+  --bg-color: #0f111a;
+  --card-bg: #151829;
+  --input-bg: #0a0b12;
+  --glass-border: #1e233d;
+  --accent-primary: #8b5cf6;
+  --accent-primary-dark: #6d28d9;
+  --accent-glow: rgba(139, 92, 246, 0.15);
+  
+  --text-main: #ffffff;
+  --text-dim: #94a3b8;
+  --gradient: linear-gradient(135deg, var(--accent-primary), var(--accent-primary-dark));
+  --transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  
+  /* System Colors for Notifications */
+  --color-error: #ef4444;
+  --color-success: #10b981;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Theme Color combinations */
+[data-theme-color="purple"] {
+  --accent-primary: #8b5cf6;
+  --accent-primary-dark: #6d28d9;
+  --accent-glow: rgba(139, 92, 246, 0.15);
+}
+[data-theme-color="blue"] {
+  --accent-primary: #3b82f6;
+  --accent-primary-dark: #1d4ed8;
+  --accent-glow: rgba(59, 130, 246, 0.15);
+}
+[data-theme-color="green"] {
+  --accent-primary: #10b981;
+  --accent-primary-dark: #047857;
+  --accent-glow: rgba(16, 185, 129, 0.15);
+}
+[data-theme-color="orange"] {
+  --accent-primary: #f97316;
+  --accent-primary-dark: #c2410c;
+  --accent-glow: rgba(249, 115, 22, 0.15);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Dark Mode Background shades */
+[data-mode="dark"][data-bg-shade="1"] {
+  --bg-color: #0f111a;
+  --card-bg: #151829;
+  --input-bg: #0a0b12;
+  --glass-border: #1e233d;
+  --text-main: #ffffff;
+  --text-dim: #94a3b8;
+}
+[data-mode="dark"][data-bg-shade="2"] {
+  --bg-color: #06070d;
+  --card-bg: #0b0d19;
+  --input-bg: #04050a;
+  --glass-border: #131627;
+  --text-main: #ffffff;
+  --text-dim: #8f9bb3;
+}
+[data-mode="dark"][data-bg-shade="3"] {
+  --bg-color: #09090b;
+  --card-bg: #18181b;
+  --input-bg: #030303;
+  --glass-border: #27272a;
+  --text-main: #ffffff;
+  --text-dim: #a1a1aa;
+}
+[data-mode="dark"][data-bg-shade="4"] {
+  --bg-color: #121824;
+  --card-bg: #1e293b;
+  --input-bg: #0f131e;
+  --glass-border: #334155;
+  --text-main: #ffffff;
+  --text-dim: #94a3b8;
+}
+
+/* Light Mode theme settings & Background shades */
+[data-mode="light"] {
+  --text-main: #0f172a;
+  --text-dim: #475569;
+}
+[data-mode="light"][data-bg-shade="1"] {
+  --bg-color: #f8fafc;
+  --card-bg: #ffffff;
+  --input-bg: #f1f5f9;
+  --glass-border: #e2e8f0;
+}
+[data-mode="light"][data-bg-shade="2"] {
+  --bg-color: #faf8ff;
+  --card-bg: #ffffff;
+  --input-bg: #f5f0ff;
+  --glass-border: #e9e3ff;
+}
+[data-mode="light"][data-bg-shade="3"] {
+  --bg-color: #f0f7ff;
+  --card-bg: #ffffff;
+  --input-bg: #edf5ff;
+  --glass-border: #d0e7ff;
+}
+[data-mode="light"][data-bg-shade="4"] {
+  --bg-color: #fafaf9;
+  --card-bg: #ffffff;
+  --input-bg: #f5f5f4;
+  --glass-border: #e7e5e4;
+}
+
+@theme {
+  --color-brand-bg: var(--bg-color);
+  --color-brand-card: var(--card-bg);
+  --color-brand-input: var(--input-bg);
+  --color-brand-border: var(--glass-border);
+  --color-brand-accent: var(--accent-primary);
+  --color-brand-accent-dark: var(--accent-primary-dark);
+  --color-brand-glow: var(--accent-glow);
+  --color-brand-text: var(--text-main);
+  --color-brand-dim: var(--text-dim);
+  --color-brand-error: var(--color-error);
+  --color-brand-success: var(--color-success);
+
+  --font-cairo: var(--font-cairo);
+  --font-inter: var(--font-inter);
+
+  --animate-slide-in-left: slide-in-left 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-swing: swing 1.2s ease-in-out infinite;
+
+  @keyframes slide-in-left {
+    from {
+      transform: translateX(-100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes swing {
+    0%, 100% { transform: rotate(0); }
+    20% { transform: rotate(15deg); }
+    40% { transform: rotate(-10deg); }
+    60% { transform: rotate(5deg); }
+    80% { transform: rotate(-5deg); }
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  font-family: var(--font-cairo), var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  min-height: 100vh;
+  margin: 0;
+  overflow-x: hidden;
 }
+
+/* Custom autofill style overrides to prevent default browser white background in dark mode */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #05060f inset !important;
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+.dir-ltr {
+  direction: ltr !important;
+}
+
+/* Remove default arrow spinners from number inputs globally */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Custom scrollbar utility */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Custom class overrides to support mode background color changes dynamically, excluding color selection circles */
+[class*="bg-[#"]:not([class*="bg-[#8b5cf6]"]):not([class*="bg-[#3b82f6]"]):not([class*="bg-[#10b981]"]):not([class*="bg-[#f97316]"]) {
+  background-color: var(--card-bg) !important;
+}
+
+/* Specific inputs, nested panels, & inner widgets mapping to var(--input-bg) */
+input[class*="bg-[#"],
+select[class*="bg-[#"],
+textarea[class*="bg-[#"],
+[class*="bg-[#070814]"],
+[class*="bg-[#070912]"],
+[class*="bg-[#060811]"],
+[class*="bg-[#030408]"],
+[class*="bg-[#0e121b]"],
+[class*="bg-[#0b0d19]"],
+[class*="bg-[#0c0e1b]"] {
+  background-color: var(--input-bg) !important;
+}
+
+/* Force border hex values to be card borders */
+[class*="border-[#"] {
+  border-color: var(--glass-border) !important;
+}
+
+/* Modal and panel backdrops in light mode */
+[data-mode="light"] .fixed.inset-0.bg-\[\#05060f\]\/80,
+[data-mode="light"] .fixed.inset-0.bg-black\/60,
+[data-mode="light"] .fixed.inset-0.bg-brand-bg\/85 {
+  background-color: rgba(15, 23, 42, 0.5) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+
+/* Light mode modifications for text colors and scrollbars */
+[data-mode="light"] .text-white {
+  color: var(--text-main) !important;
+}
+
+[data-mode="light"] [class*="text-white/"],
+[data-mode="light"] [class*="text-white\\/"] {
+  color: var(--text-dim) !important;
+}
+
+[data-mode="light"] [class*="text-brand-dim"] {
+  color: var(--text-dim) !important;
+}
+
+[data-mode="light"] .bg-white\/\[0\.02\] {
+  background-color: rgba(0, 0, 0, 0.02) !important;
+}
+
+[data-mode="light"] .bg-white\/\[0\.08\] {
+  background-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-mode="light"] .border-white\/25 {
+  border-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Sidebar active nav item styling in light mode */
+[data-mode="light"] aside a.bg-gradient-to-r {
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent) !important;
+  border-color: color-mix(in srgb, var(--accent-primary) 30%, transparent) !important;
+  color: var(--accent-primary-dark) !important;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--accent-primary) 8%, transparent) !important;
+}
+
+[data-mode="light"] aside a.bg-gradient-to-r * {
+  color: var(--accent-primary-dark) !important;
+}
+
+/* Inputs, selects, textareas, and date fields in light mode */
+[data-mode="light"] input,
+[data-mode="light"] select,
+[data-mode="light"] textarea,
+[data-mode="light"] button[class*="bg-[#"],
+[data-mode="light"] [class*="bg-[#"] select,
+[data-mode="light"] [class*="bg-[#"] input {
+  color: var(--text-main) !important;
+}
+
+[data-mode="light"] [class*="hover:text-white"]:hover,
+[data-mode="light"] [class*="hover:text-white/"]:hover,
+[data-mode="light"] [class*="hover:text-white\\/"]:hover {
+  color: var(--text-main) !important;
+}
+
+[data-mode="light"] [class*="bg-[#"] * {
+  color: var(--text-main);
+}
+
+[data-mode="light"] [class*="bg-[#"] [class*="text-white/"],
+[data-mode="light"] [class*="bg-[#"] [class*="text-white\\/"],
+[data-mode="light"] [class*="bg-[#"] [class*="text-brand-dim"] {
+  color: var(--text-dim) !important;
+}
+
+/* Specific date input picker styling for Chrome / Edge / Safari */
+[data-mode="light"] input[type="date"]::-webkit-datetime-edit,
+[data-mode="light"] input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+[data-mode="light"] input[type="date"]::-webkit-datetime-edit-text,
+[data-mode="light"] input[type="date"]::-webkit-datetime-edit-month-field,
+[data-mode="light"] input[type="date"]::-webkit-datetime-edit-day-field,
+[data-mode="light"] input[type="date"]::-webkit-datetime-edit-year-field {
+  color: var(--text-main) !important;
+}
+[data-mode="light"] input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0) !important;
+  opacity: 0.5 !important;
+}
+
+[data-mode="light"] ::placeholder,
+[data-mode="light"] input::placeholder,
+[data-mode="light"] select::placeholder,
+[data-mode="light"] textarea::placeholder,
+[data-mode="light"] [class*="placeholder-"]::placeholder {
+  color: rgba(15, 23, 42, 0.45) !important;
+  opacity: 1 !important;
+}
+
+/* Ensure high-contrast status text colors in light mode */
+[data-mode="light"] .text-purple-400,
+[data-mode="light"] .text-violet-400 {
+  color: var(--accent-primary-dark) !important;
+}
+[data-mode="light"] .text-blue-400 {
+  color: #1d4ed8 !important; /* Blue 700 */
+}
+[data-mode="light"] .text-emerald-400,
+[data-mode="light"] .text-green-400 {
+  color: #047857 !important; /* Emerald 700 */
+}
+[data-mode="light"] .text-red-400 {
+  color: #b91c1c !important; /* Red 700 */
+}
+[data-mode="light"] .text-amber-400,
+[data-mode="light"] .text-orange-400 {
+  color: #b45309 !important; /* Amber 700 */
+}
+[data-mode="light"] .text-pink-400 {
+  color: #be185d !important;
+}
+[data-mode="light"] .text-indigo-400 {
+  color: #4338ca !important;
+}
+[data-mode="light"] .text-cyan-400 {
+  color: #0e7490 !important;
+}
+[data-mode="light"] .text-brand-accent {
+  color: var(--accent-primary-dark) !important;
+}
+
+/* Retain white text inside specific accent background, gradients, badges, alerts, or explicitly on buttons */
+[data-mode="light"] .bg-brand-accent .text-white,
+[data-mode="light"] .bg-brand-accent * .text-white,
+[data-mode="light"] .bg-brand-accent-dark .text-white,
+[data-mode="light"] .bg-red-500 .text-white,
+[data-mode="light"] .bg-red-500 * .text-white,
+[data-mode="light"] .bg-red-600 .text-white,
+[data-mode="light"] .bg-emerald-500 .text-white,
+[data-mode="light"] .bg-emerald-500 * .text-white,
+[data-mode="light"] .bg-emerald-600 .text-white,
+[data-mode="light"] .bg-blue-500 .text-white,
+[data-mode="light"] .bg-blue-500 * .text-white,
+[data-mode="light"] .bg-amber-500 .text-white,
+[data-mode="light"] .bg-amber-500 * .text-white,
+[data-mode="light"] button.bg-brand-accent,
+[data-mode="light"] button.bg-brand-accent *,
+[data-mode="light"] button.bg-red-500,
+[data-mode="light"] button.bg-red-500 *,
+[data-mode="light"] button.bg-emerald-500,
+[data-mode="light"] button.bg-emerald-500 *,
+[data-mode="light"] a.bg-brand-accent,
+[data-mode="light"] a.bg-brand-accent *,
+[data-mode="light"] .from-brand-accent.to-brand-accent-dark,
+[data-mode="light"] .from-brand-accent.to-brand-accent-dark *,
+[data-mode="light"] [class*="bg-[#8b5cf6]"],
+[data-mode="light"] [class*="bg-[#8b5cf6]"] *,
+[data-mode="light"] [class*="bg-[#3b82f6]"],
+[data-mode="light"] [class*="bg-[#3b82f6]"] *,
+[data-mode="light"] [class*="bg-[#10b981]"],
+[data-mode="light"] [class*="bg-[#10b981]"] *,
+[data-mode="light"] [class*="bg-[#f97316]"],
+[data-mode="light"] [class*="bg-[#f97316]"] * {
+  color: #ffffff !important;
+}
+
+/* Disabled input and button states in light mode */
+[data-mode="light"] input:disabled,
+[data-mode="light"] select:disabled,
+[data-mode="light"] textarea:disabled,
+[data-mode="light"] button:disabled,
+[data-mode="light"] [class*="disabled:bg-gray-900/50"]:disabled {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+  color: rgba(15, 23, 42, 0.4) !important;
+  cursor: not-allowed !important;
+}
+
+/* Border overlays in light mode */
+[data-mode="light"] .border-white\/5,
+[data-mode="light"] .border-white\/10 {
+  border-color: rgba(0, 0, 0, 0.06) !important;
+}
+[data-mode="light"] .border-brand-border\/40,
+[data-mode="light"] .border-brand-border\/30,
+[data-mode="light"] .border-brand-border\/20,
+[data-mode="light"] .border-brand-border\/15,
+[data-mode="light"] .border-brand-border\/55 {
+  border-color: var(--glass-border) !important;
+}
+
+/* Light mode specific background overlays for buttons, lists, charts */
+[data-mode="light"] [class*="bg-white/"],
+[data-mode="light"] [class*="bg-white\\/"] {
+  background-color: rgba(0, 0, 0, 0.03) !important;
+}
+[data-mode="light"] [class*="hover:bg-white"]:hover,
+[data-mode="light"] [class*="hover:bg-white/"]:hover,
+[data-mode="light"] [class*="hover:bg-white\\/"]:hover {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Scrollbar and webkit-autofill light overrides */
+[data-mode="light"] .custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+[data-mode="light"] .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1) !important;
+}
+[data-mode="light"] .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2) !important;
+}
+
+[data-mode="light"] input:-webkit-autofill,
+[data-mode="light"] input:-webkit-autofill:hover, 
+[data-mode="light"] input:-webkit-autofill:focus, 
+[data-mode="light"] input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px var(--input-bg) inset !important;
+  -webkit-text-fill-color: var(--text-main) !important;
+  caret-color: var(--text-main) !important;
+}
+
+/* Specific theme color selection circle buttons (prevents override from generic bg-[#] rules) */
+.theme-dot-purple {
+  background-color: #8b5cf6 !important;
+}
+.theme-dot-blue {
+  background-color: #3b82f6 !important;
+}
+.theme-dot-green {
+  background-color: #10b981 !important;
+}
+.theme-dot-orange {
+  background-color: #f97316 !important;
+}
+
+[data-mode="light"] .theme-dot-purple *,
+[data-mode="light"] .theme-dot-blue *,
+[data-mode="light"] .theme-dot-green *,
+[data-mode="light"] .theme-dot-orange * {
+  color: #ffffff !important;
+}
+
