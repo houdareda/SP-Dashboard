@@ -11,7 +11,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [rememberMe, setRememberMe] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -20,6 +20,7 @@ export default function LoginPage() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
+          setIsRedirecting(true);
           router.push("/dashboard");
         }
       } catch (err) {
@@ -31,6 +32,7 @@ export default function LoginPage() {
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
+        setIsRedirecting(true);
         router.push("/dashboard");
       }
     });
@@ -64,7 +66,8 @@ export default function LoginPage() {
         throw error;
       }
 
-      // If successful, redirect to dashboard
+      // If successful, show the redirect overlay and navigate
+      setIsRedirecting(true);
       router.push("/dashboard");
     } catch (err: any) {
       console.error("Login error:", err);
@@ -74,7 +77,6 @@ export default function LoginPage() {
       } else {
         setErrorMsg(err.message || "حدث خطأ أثناء تسجيل الدخول. يرجى المحاولة مرة أخرى.");
       }
-    } finally {
       setIsLoading(false);
     }
   };
@@ -84,6 +86,18 @@ export default function LoginPage() {
       {/* Background glow effects */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-brand-accent/10 rounded-full blur-[120px] pointer-events-none" />
       
+      {isRedirecting && (
+        <div className="fixed inset-0 bg-[#05060f]/95 backdrop-blur-md z-[100] flex flex-col items-center justify-center font-cairo">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center shadow-[0_0_30px_rgba(139,92,246,0.15)] animate-pulse">
+              <Loader2 size={32} className="text-brand-accent animate-spin" />
+            </div>
+            <h2 className="text-xl font-bold text-white tracking-wide">تم تسجيل الدخول بنجاح!</h2>
+            <p className="text-sm text-brand-dim mt-1">جاري تهيئة لوحة التحكم وتحميل البيانات...</p>
+          </div>
+        </div>
+      )}
+
       <div className="w-full max-w-[440px] backdrop-blur-xl bg-brand-card border border-brand-border rounded-[24px] p-8 md:p-10 shadow-2xl relative z-10">
         
         {/* Logo */}
@@ -173,25 +187,6 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Remember me & Forgot password */}
-          <div className="flex items-center justify-between text-xs sm:text-sm pt-1 select-none">
-            <a
-              href="#forgot"
-              className="text-brand-dim hover:text-white transition-colors hover:underline"
-            >
-              نسيت كلمة المرور؟
-            </a>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <span className="text-brand-dim">تذكرني</span>
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="w-4 h-4 rounded border-brand-border bg-[#070814] text-brand-accent focus:ring-brand-accent focus:ring-offset-0 focus:ring-offset-transparent focus:outline-none accent-brand-accent"
-              />
-            </label>
-          </div>
-
           {/* Error Message */}
           {errorMsg && (
             <div className="text-brand-error text-xs sm:text-sm text-right bg-brand-error/10 border border-brand-error/20 px-3.5 py-2.5 rounded-lg transition-all">
@@ -215,15 +210,6 @@ export default function LoginPage() {
             )}
           </button>
         </form>
-
-        {/* Footer */}
-        <div className="text-center mt-8 text-xs sm:text-sm font-cairo select-none">
-          <span className="text-brand-dim">جديد في شيفت بوينت؟ </span>
-          <a href="#join" className="text-brand-accent hover:underline font-semibold transition-all">
-            طلب انضمام
-          </a>
-        </div>
-
       </div>
     </main>
   );

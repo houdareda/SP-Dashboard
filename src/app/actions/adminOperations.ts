@@ -562,6 +562,16 @@ export async function reviewEditRequest(
         return { success: false, error: "التغييرات المقترحة فارغة." };
       }
 
+      // Fetch current total_cash for this daily_expenses record to keep cash_after_expenses in sync
+      const { data: currentExpense } = await supabaseAdmin
+        .from("daily_expenses")
+        .select("total_cash")
+        .eq("id", expenseId)
+        .single();
+        
+      const currentTotalCash = Number(currentExpense?.total_cash || 0);
+      const newCashAfterExpenses = currentTotalCash - Number(newChanges.total_amount);
+
       // Step A: Update the base record inside daily_expenses
       const { error: updateExpenseError } = await supabaseAdmin
         .from("daily_expenses")
@@ -571,6 +581,7 @@ export async function reviewEditRequest(
           marketing_2: Number(newChanges.marketing_2) || 0,
           marketing_3: Number(newChanges.marketing_3) || 0,
           personal_expense: Number(newChanges.personal_expense) || 0,
+          cash_after_expenses: newCashAfterExpenses,
         })
         .eq("id", expenseId);
 

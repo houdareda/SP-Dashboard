@@ -33,6 +33,9 @@ export interface DailyExpensesInput {
   marketing3: number;
   personalExpense: number;
   transfers: ExpenseTransferInput[];
+  totalCash: number;
+  cashAfterExpenses: number;
+  walletsBalances: { wallet_id: string; phone_number: string; balance: number }[];
 }
 
 export interface EditExpensesRequestInput {
@@ -299,7 +302,7 @@ export async function submitDailyExpenses(input: DailyExpensesInput, passwordCon
       return { success: false, error: "غير مصرح بالعملية. الرجاء تسجيل الدخول أولاً." };
     }
 
-    const { expenseDate, totalAmount, marketing1, marketing2, marketing3, personalExpense, transfers } = input;
+    const { expenseDate, totalAmount, marketing1, marketing2, marketing3, personalExpense, transfers, totalCash, cashAfterExpenses, walletsBalances } = input;
 
     // 1. Basic validation
     if (!expenseDate) {
@@ -371,6 +374,9 @@ export async function submitDailyExpenses(input: DailyExpensesInput, passwordCon
         marketing_2: marketing2,
         marketing_3: marketing3,
         personal_expense: personalExpense,
+        total_cash: totalCash,
+        cash_after_expenses: cashAfterExpenses,
+        wallets_balances: walletsBalances,
       })
       .select("id")
       .single();
@@ -893,5 +899,60 @@ export async function getAgentEditRequestsPaginated(params: {
   } catch (err: any) {
     console.error("getAgentEditRequestsPaginated error:", err);
     return { success: false, error: err.message, data: [], totalCount: 0 };
+  }
+}
+
+/**
+ * Fetches the current custody balance for a specific agent
+ */
+export async function getAgentCurrentCustody(agentId: string): Promise<number> {
+  try {
+    // 1. Fetch approved funds (all-time)
+    const { data: approvedFunds } = await supabaseAdmin
+      .from("fund_requests")
+      .select("amount_approved")
+      .eq("agent_id", agentId)
+      .eq("status", "approved");
+
+    const approvedSum = (approvedFunds || []).reduce((sum, f) => sum + (Number(f.amount_approved) || 0), 0);
+
+    // 2. Fetch daily expenses spent (all-time)
+    const { data: expenses } = await supabaseAdmin
+      .from("daily_expenses")
+      .select("personal_expense, marketing_1, marketing_2, marketing_3")
+      .eq("agent_id", agentId);
+
+    const expensesSum = (expenses || []).reduce((sum, e) => {
+      const p = Number(e.personal_expense) || 0;
+      const m1 = Number(e.marketing_1) || 0;
+      const m2 = Number(e.marketing_2) || 0;
+      const m3 = Number(e.marketing_3) || 0;
+      return sum + p + m1 + m2 + m3;
+    }, 0);
+
+    // 3. Fetch custody transfers sent and received (all-time)
+    const { data: transfers } = await supabaseAdmin
+      .from("expense_transfers")
+      .select("amount, from_agent_id, to_agent_id")
+      .or(`from_agent_id.eq.${agentId},to_agent_id.eq.${agentId}`);
+
+    let sentSum = 0;
+    let receivedSum = 0;
+
+    if (transfers) {
+      transfers.forEach((t) => {
+        if (t.from_agent_id === agentId) {
+          sentSum += Number(t.amount) || 0;
+        }
+        if (t.to_agent_id === agentId) {
+          receivedSum += Number(t.amount) || 0;
+        }
+      });
+    }
+
+    return approvedSum + receivedSum - (expensesSum + sentSum);
+  } catch (err) {
+    console.error("Error calculating current custody for agent:", err);
+    return 0;
   }
 }

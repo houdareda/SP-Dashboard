@@ -7,6 +7,7 @@ import {
   getColleagues,
   WalletWithBalance,
   ColleagueData,
+  getAgentCurrentCustody,
 } from "@/app/actions/operations";
 import { checkWalletVerificationNeeded } from "@/app/actions/wallet";
 import WalletVerificationWrapper from "@/components/WalletVerificationWrapper";
@@ -80,6 +81,9 @@ export default async function OperationsPage() {
     console.error("Error fetching colleagues:", colleaguesRes.error);
   }
 
+  // Fetch current custody balance
+  const currentCustody = await getAgentCurrentCustody(user.id);
+
   return (
     <WalletVerificationWrapper
       needsVerification={verificationRes.needsVerification}
@@ -89,6 +93,7 @@ export default async function OperationsPage() {
         initialWallets={initialWallets}
         colleagues={colleagues}
         userFullName={currentProfile.full_name || "مستخدم"}
+        currentCustody={currentCustody}
       />
     </WalletVerificationWrapper>
   );
