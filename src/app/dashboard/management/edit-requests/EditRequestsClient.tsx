@@ -14,6 +14,9 @@ import {
   CheckCircle2,
   AlertTriangle,
   Loader2,
+  Megaphone,
+  Coins,
+  Wallet,
 } from "lucide-react";
 import {
   EditExpenseRequestData,
@@ -593,8 +596,16 @@ export default function EditRequestsClient({
                         <span className="font-semibold text-white font-inter">{(req.expense?.marketing_3 || 0).toLocaleString("en-US")} ج.م</span>
                       </div>
                       <div className="flex justify-between items-center border-t border-brand-border/20 pt-2.5 font-bold">
-                        <span className="text-white select-none">إجمالي التقرير (التوتال)</span>
+                        <span className="text-white select-none">إجمالي مصروفات المحفظة</span>
                         <span className="text-brand-accent text-sm font-inter">{(req.expense?.total_amount || 0).toLocaleString("en-US")} ج.م</span>
+                      </div>
+                      <div className="flex justify-between items-center border-t border-brand-border/10 pt-2 font-semibold">
+                        <span className="text-brand-dim select-none">توتال الكاش</span>
+                        <span className="text-white font-inter">{(req.expense?.total_cash || 0).toLocaleString("en-US")} ج.م</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-brand-dim select-none">الكاش بعد خصم الشخصي والتحويلات</span>
+                        <span className="text-white font-inter">{(req.expense?.cash_after_expenses || 0).toLocaleString("en-US")} ج.م</span>
                       </div>
                     </div>
                   </div>
@@ -664,7 +675,7 @@ export default function EditRequestsClient({
 
                       {/* Total Amount Check */}
                       <div className="flex justify-between items-center border-t border-brand-border/20 pt-2.5 font-bold">
-                        <span className="text-white select-none">إجمالي التقرير (التوتال)</span>
+                        <span className="text-white select-none">إجمالي مصروفات المحفظة</span>
                         {req.requested_changes.total_amount === req.expense?.total_amount ? (
                           <span className="text-brand-accent text-sm font-inter">{(req.expense?.total_amount || 0).toLocaleString("en-US")} ج.م</span>
                         ) : (
@@ -676,9 +687,90 @@ export default function EditRequestsClient({
                         )}
                       </div>
 
+                      {/* Total Cash Check */}
+                      <div className="flex justify-between items-center border-t border-brand-border/10 pt-2">
+                        <span className="text-brand-dim select-none">توتال الكاش المقترح</span>
+                        {req.requested_changes.total_cash === req.expense?.total_cash || req.requested_changes.total_cash === undefined ? (
+                          <span className="text-brand-dim/50 text-[11px] font-medium select-none">لا يوجد تغيير</span>
+                        ) : (
+                          <span className="font-bold font-inter flex items-center gap-1.5">
+                            <span className="text-brand-accent">{(req.requested_changes.total_cash || 0).toLocaleString("en-US")} ج.م</span>
+                            <span className="text-brand-dim/50 text-xs">←</span>
+                            <span className="text-red-400 line-through text-xs font-normal">{(req.expense?.total_cash || 0).toLocaleString("en-US")} ج.م</span>
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Cash After Expenses Check */}
+                      <div className="flex justify-between items-center">
+                        <span className="text-brand-dim select-none">الكاش بعد خصم الشخصي والتحويلات</span>
+                        {req.requested_changes.cash_after_expenses === req.expense?.cash_after_expenses || req.requested_changes.cash_after_expenses === undefined ? (
+                          <span className="text-brand-dim/50 text-[11px] font-medium select-none">لا يوجد تغيير</span>
+                        ) : (
+                          <span className="font-bold font-inter flex items-center gap-1.5">
+                            <span className="text-brand-accent">{(req.requested_changes.cash_after_expenses || 0).toLocaleString("en-US")} ج.م</span>
+                            <span className="text-brand-dim/50 text-xs">←</span>
+                            <span className="text-red-400 line-through text-xs font-normal">{(req.expense?.cash_after_expenses || 0).toLocaleString("en-US")} ج.م</span>
+                          </span>
+                        )}
+                      </div>
+
                     </div>
                   </div>
 
+                </div>
+
+                {/* Wallets Snapshot Comparison Block */}
+                <div className="bg-[#070814]/30 border border-brand-border/40 p-5 rounded-2xl space-y-3">
+                  <h5 className="text-[13px] font-bold text-brand-dim border-b border-brand-border/20 pb-2 select-none">
+                    | مقارنة أرصدة كاش المحافظ والكامبين
+                  </h5>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {(() => {
+                      const originalWallets = req.expense?.wallets_balances || [];
+                      const proposedWallets = req.requested_changes.wallets_balances || [];
+
+                      const origMap: Record<string, any> = {};
+                      originalWallets.forEach((w: any) => { origMap[w.wallet_id] = w; });
+
+                      const propMap: Record<string, any> = {};
+                      proposedWallets.forEach((w: any) => { propMap[w.wallet_id] = w; });
+
+                      const allWalletIds = Array.from(new Set([
+                        ...originalWallets.map((w: any) => w.wallet_id),
+                        ...proposedWallets.map((w: any) => w.wallet_id)
+                      ]));
+
+                      if (allWalletIds.length === 0) {
+                        return <div className="col-span-2 text-center text-xs text-brand-dim/50 select-none py-2">لا توجد بيانات مسجلة للمحافظ لهذا اليوم.</div>;
+                      }
+
+                      return allWalletIds.map((wId) => {
+                        const origW = origMap[wId];
+                        const propW = propMap[wId];
+                        const label = wId === "campaign" ? "كامبين 📢" : (origW?.phone_number || propW?.phone_number || "محفظة");
+
+                        const origBal = origW ? Number(origW.balance) : 0;
+                        const propBal = propW ? Number(propW.balance) : 0;
+                        const isChanged = origBal !== propBal;
+
+                        return (
+                          <div key={wId} className="flex justify-between items-center bg-[#070814]/50 border border-brand-border/40 px-4 py-3 rounded-xl gap-2 text-xs">
+                            <span className="font-bold text-white font-mono select-all text-right">{label}</span>
+                            {isChanged ? (
+                              <span className="font-bold font-inter flex items-center gap-1.5">
+                                <span className="text-brand-accent">{propBal.toLocaleString("en-US")} ج.م</span>
+                                <span className="text-brand-dim/50 text-xs">←</span>
+                                <span className="text-red-400 line-through text-xs font-normal">{origBal.toLocaleString("en-US")} ج.م</span>
+                              </span>
+                            ) : (
+                              <span className="text-white/60 font-inter">{origBal.toLocaleString("en-US")} ج.م</span>
+                            )}
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
                 </div>
 
                 {/* Custody Transfers Comparison Block */}

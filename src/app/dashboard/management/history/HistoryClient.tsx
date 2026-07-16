@@ -11,6 +11,10 @@ import {
   User,
   ChevronDown,
   Check,
+  Megaphone,
+  X,
+  Loader2,
+  Wallet,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import {
@@ -19,6 +23,7 @@ import {
   getAdminEditRequestsPaginated,
   getAdminWalletsWithBalances,
 } from "@/app/actions/adminOperations";
+import { getExpenseTransfers } from "@/app/actions/operations";
 
 interface HistoryClientProps {
   initialFundRequests: any[];
@@ -57,6 +62,27 @@ export default function HistoryClient({
   const [editPage, setEditPage] = useState<number>(1);
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  // Detailed Expense Modal view
+  const [selectedExpense, setSelectedExpense] = useState<any | null>(null);
+  const [expenseTransfers, setExpenseTransfers] = useState<any[]>([]);
+  const [isLoadingTransfers, setIsLoadingTransfers] = useState<boolean>(false);
+
+  const openExpenseDetailModal = async (exp: any) => {
+    setSelectedExpense(exp);
+    setExpenseTransfers([]);
+    setIsLoadingTransfers(true);
+    try {
+      const res = await getExpenseTransfers(exp.id);
+      if (res.success) {
+        setExpenseTransfers(res.transfers || []);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoadingTransfers(false);
+    }
+  };
 
   // Sync props to state if props change (e.g. on server navigations)
   useEffect(() => {
@@ -802,7 +828,9 @@ export default function HistoryClient({
                     <tr className="border-b border-brand-border/40 text-brand-dim/70 text-xs font-bold">
                       <th className="pb-3.5 pr-2 font-bold">الموظف</th>
                       <th className="pb-3.5 font-bold">تاريخ التقرير</th>
-                      <th className="pb-3.5 font-bold">الإجمالي اليومي</th>
+                      <th className="pb-3.5 font-bold">توتال الكاش</th>
+                      <th className="pb-3.5 font-bold">توتال كاش بعد الخصم</th>
+                      <th className="pb-3.5 font-bold">إجمالي المصروفات</th>
                       <th className="pb-3.5 font-bold">تسويق 1</th>
                       <th className="pb-3.5 font-bold">تسويق 2</th>
                       <th className="pb-3.5 font-bold">تسويق 3</th>
@@ -813,7 +841,8 @@ export default function HistoryClient({
                     {dailyExpenses.map((exp) => (
                       <tr
                         key={exp.id}
-                        className="border-b border-brand-border/20 text-xs text-white/80 hover:bg-white/[0.02] transition-colors"
+                        onClick={() => openExpenseDetailModal(exp)}
+                        className="border-b border-brand-border/20 text-xs text-white/80 hover:bg-white/[0.02] transition-colors cursor-pointer active:scale-[0.99] select-none"
                       >
                         <td className="py-4 pr-2 font-bold text-brand-accent capitalize">
                           {exp.agent?.full_name || "-"}
@@ -821,10 +850,14 @@ export default function HistoryClient({
                         <td className="py-4 font-medium">
                           {formatDate(exp.expense_date)}
                         </td>
-                        <td className="py-4">
-                          <span className="font-bold text-brand-accent text-sm font-inter">
-                            {Number(exp.total_amount).toLocaleString("en-US")} ج.م
-                          </span>
+                        <td className="py-4 font-inter text-white/90">
+                          {Number(exp.total_cash || 0).toLocaleString("en-US")} ج.م
+                        </td>
+                        <td className="py-4 font-inter text-white/90 font-bold text-brand-accent">
+                          {Number(exp.cash_after_expenses || 0).toLocaleString("en-US")} ج.م
+                        </td>
+                        <td className="py-4 font-inter text-white/90">
+                          {Number(exp.total_amount).toLocaleString("en-US")} ج.م
                         </td>
                         <td className="py-4 font-inter text-white/90">
                           {Number(exp.marketing_1).toLocaleString("en-US")} ج.م
@@ -887,12 +920,18 @@ export default function HistoryClient({
                             {req.expense?.expense_date ? formatDate(req.expense.expense_date) : "-"}
                           </td>
                           <td className="py-4 max-w-[280px]">
-                            <div className="flex flex-col gap-1 bg-white/[0.02] border border-brand-border/20 rounded-xl p-2.5 text-[10px] leading-relaxed text-brand-dim">
+                            <div className="flex flex-col gap-1 bg-[#090b16]/40 border border-brand-border/20 rounded-xl p-2.5 text-[10px] leading-relaxed text-brand-dim">
+                              {changes.total_cash !== undefined && (
+                                <div>توتال كاش جديد: <strong className="text-white font-inter">{changes.total_cash} ج.م</strong></div>
+                              )}
+                              {changes.cash_after_expenses !== undefined && (
+                                <div>كاش بعد الخصم جديد: <strong className="text-white font-inter">{changes.cash_after_expenses} ج.م</strong></div>
+                              )}
                               <div>إجمالي جديد: <strong className="text-white font-inter">{changes.total_amount} ج.م</strong></div>
                               <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 mt-1 border-t border-brand-border/10 pt-1">
                                 <div>تسويق 1: <span className="font-inter">{changes.marketing_1} ج.م</span></div>
                                 <div>تسويق 2: <span className="font-inter">{changes.marketing_2} ج.م</span></div>
-                                <div>تسويق 3: <span className="font-inter">{changes.marketing_3} ج.م</span></div>
+                                <div>تسويق 3: <span className="font-inter">{changes.marketing_3} ج.m</span></div>
                                 <div>شخصي: <span className="font-inter">{changes.personal_expense} ج.م</span></div>
                               </div>
                             </div>
@@ -921,6 +960,238 @@ export default function HistoryClient({
             )}
           </div>
         )}
+
+      {/* Detailed Expense Modal Popup */}
+      {selectedExpense && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-[#020208]/80 backdrop-blur-md transition-opacity"
+            onClick={() => setSelectedExpense(null)}
+          />
+
+          {/* Modal Container */}
+          <div className="relative w-full max-w-5xl bg-[#090c1e] border border-brand-border/60 rounded-[28px] shadow-2xl p-6 md:p-8 overflow-y-auto max-h-[90vh] text-right font-cairo animate-scale-in text-white" dir="rtl">
+            
+            {/* Close Icon */}
+            <button
+              onClick={() => setSelectedExpense(null)}
+              className="absolute top-5 left-5 text-white/40 hover:text-white transition-colors cursor-pointer w-8 h-8 rounded-full bg-white/[0.03] border border-white/10 flex items-center justify-center"
+            >
+              <X size={16} />
+            </button>
+
+            {/* Header */}
+            <div className="border-b border-brand-border/20 pb-4 mb-6">
+              <h3 className="text-lg md:text-xl font-extrabold text-white flex items-center gap-2.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-accent opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-accent"></span>
+                </span>
+                <span>تفاصيل التقرير المالي ليوم {formatDate(selectedExpense.expense_date)}</span>
+              </h3>
+              {selectedExpense.agent?.full_name && (
+                <p className="text-xs text-brand-dim mt-1.5">
+                  بواسطة الموظف: <strong className="text-brand-accent">{selectedExpense.agent.full_name}</strong>
+                </p>
+              )}
+            </div>
+
+            {/* Content Responsive Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* Right Side: Form details (2/3 cols) */}
+              <div className="lg:col-span-2 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  
+                  {/* Date */}
+                  <div className="space-y-1.5">
+                    <span className="block text-[11px] font-semibold text-brand-dim opacity-70">تاريخ اليوم المالي</span>
+                    <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr select-all">
+                      {selectedExpense.expense_date}
+                    </div>
+                  </div>
+
+                  {/* Total Cash */}
+                  <div className="space-y-1.5">
+                    <span className="block text-[11px] font-semibold text-brand-dim">توتال الكاش</span>
+                    <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
+                      {Number(selectedExpense.total_cash || 0).toLocaleString("en-US")} ج.م
+                    </div>
+                  </div>
+
+                  {/* Cash After Expenses */}
+                  <div className="space-y-1.5">
+                    <span className="block text-[11px] font-semibold text-brand-dim">توتال الكاش بعد خصم التحويلات والمصاريف الشخصية</span>
+                    <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr font-bold text-brand-accent">
+                      {Number(selectedExpense.cash_after_expenses || 0).toLocaleString("en-US")} ج.م
+                    </div>
+                  </div>
+
+                  {/* Total Expenses */}
+                  <div className="space-y-1.5">
+                    <span className="block text-[11px] font-semibold text-brand-dim">إجمالي مصروفات المحفظة (التوتال)</span>
+                    <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
+                      {Number(selectedExpense.total_amount || 0).toLocaleString("en-US")} ج.م
+                    </div>
+                  </div>
+
+                  {/* Personal Expense */}
+                  <div className="space-y-1.5">
+                    <span className="block text-[11px] font-semibold text-brand-dim">المصاريف الشخصية</span>
+                    <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
+                      {Number(selectedExpense.personal_expense || 0).toLocaleString("en-US")} ج.م
+                    </div>
+                  </div>
+
+                  {/* Marketing 1 */}
+                  <div className="space-y-1.5">
+                    <span className="block text-[11px] font-semibold text-brand-dim">مصاريف ماركتنج 1</span>
+                    <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
+                      {Number(selectedExpense.marketing_1 || 0).toLocaleString("en-US")} ج.م
+                    </div>
+                  </div>
+
+                  {/* Marketing 3 */}
+                  <div className="space-y-1.5">
+                    <span className="block text-[11px] font-semibold text-brand-dim">مصاريف ماركتنج 3</span>
+                    <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
+                      {Number(selectedExpense.marketing_3 || 0).toLocaleString("en-US")} ج.م
+                    </div>
+                  </div>
+
+                  {/* Marketing 2 */}
+                  <div className="space-y-1.5">
+                    <span className="block text-[11px] font-semibold text-brand-dim">مصاريف ماركتنج 2 (تلقائي)</span>
+                    <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
+                      {Number(selectedExpense.marketing_2 || 0).toLocaleString("en-US")} ج.م
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Transfers List */}
+                <div className="border-t border-brand-border/20 pt-5 mt-4 space-y-3">
+                  <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                    <Coins size={14} className="text-brand-accent" />
+                    <span>تحويلات العهدة للزملاء في هذا اليوم</span>
+                  </h4>
+                  {isLoadingTransfers ? (
+                    <div className="py-6 flex items-center justify-center gap-2 text-xs text-brand-dim">
+                      <Loader2 size={14} className="animate-spin text-brand-accent" />
+                      <span>جاري تحميل التحويلات...</span>
+                    </div>
+                  ) : expenseTransfers.length === 0 ? (
+                    <div className="text-xs text-brand-dim/50 py-3 bg-[#070814]/20 rounded-xl text-center select-none">
+                      لم يتم تسجيل أي تحويلات عهدة للزملاء في هذا اليوم.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      {expenseTransfers.map((t) => (
+                        <div key={t.id} className="flex justify-between items-center bg-[#070814]/30 border border-brand-border/30 px-4 py-3 rounded-xl text-xs">
+                          <span className="font-semibold text-white/90">{t.toAgentName}</span>
+                          <span className="font-bold text-brand-accent font-inter">{Number(t.amount).toLocaleString("en-US")} ج.م</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+              {/* Left Side: Wallets list snapshot (1/3 col) */}
+              <div className="lg:col-span-1 bg-[#090b16]/95 border border-brand-border/40 p-5 rounded-2xl flex flex-col justify-between min-h-[350px]">
+                <div>
+                  <h4 className="text-xs font-bold text-white border-b border-brand-border/20 pb-2.5 mb-3 flex items-center gap-2 select-none">
+                    <Wallet size={14} className="text-brand-accent" />
+                    <span>رصيد كاش المحافظ المسجل (Snapshot)</span>
+                  </h4>
+
+                  {(() => {
+                    const wallets = selectedExpense.wallets_balances || [];
+                    if (wallets.length === 0) {
+                      return (
+                        <div className="text-center py-10 text-xs text-brand-dim/40 select-none">
+                          لا توجد لقطة أرصدة محافظ مسجلة لهذا اليوم المالي.
+                        </div>
+                      );
+                    }
+
+                    // Calculate totals
+                    let wTotal = 0;
+                    let wWithoutCamp = 0;
+                    wallets.forEach((w: any) => {
+                      const bal = Number(w.balance) || 0;
+                      wTotal += bal;
+                      if (w.wallet_id !== "campaign") {
+                        wWithoutCamp += bal;
+                      }
+                    });
+
+                    return (
+                      <div className="space-y-2.5">
+                        <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1.5 custom-scrollbar">
+                          {wallets.map((w: any) => {
+                            const isCamp = w.wallet_id === "campaign";
+                            const label = isCamp ? "كامبين" : w.phone_number;
+                            return (
+                              <div
+                                key={w.wallet_id}
+                                className={`px-3 py-2 rounded-xl flex items-center justify-between text-xs border ${
+                                  isCamp
+                                    ? "bg-brand-accent/5 border-brand-accent/30 text-brand-accent"
+                                    : "bg-[#070814]/60 border-brand-border/25 text-white/95"
+                                }`}
+                              >
+                                <span className={`flex items-center gap-1.5 ${isCamp ? "font-bold font-cairo" : "font-mono select-all font-semibold"}`}>
+                                  {isCamp && <Megaphone size={12} />}
+                                  {label}
+                                </span>
+                                <span className="font-bold font-inter">
+                                  {Number(w.balance || 0).toLocaleString("en-US")} ج.م
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Totals */}
+                        <div className="border-t border-brand-border/20 pt-3 mt-3 space-y-2 select-none">
+                          <div className="flex justify-between items-center text-[11px] font-semibold text-brand-dim">
+                            <span>إجمالي كاش المحافظ:</span>
+                            <span className="text-white font-inter font-bold">
+                              {wTotal.toLocaleString("en-US")} ج.م
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-[11px] font-semibold text-brand-dim">
+                            <span>إجمالي الكاش بدون الكامبين:</span>
+                            <span className="text-brand-accent font-inter font-bold">
+                              {wWithoutCamp.toLocaleString("en-US")} ج.م
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Footer Action */}
+                <div className="pt-4 border-t border-brand-border/10 mt-4 select-none">
+                  <button
+                    onClick={() => setSelectedExpense(null)}
+                    type="button"
+                    className="w-full py-2.5 bg-brand-border/30 hover:bg-brand-border/50 text-white font-bold rounded-xl text-xs transition-all cursor-pointer text-center"
+                  >
+                    إغلاق التفاصيل
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      )}
 
       </div>
     </div>

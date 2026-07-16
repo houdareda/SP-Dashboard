@@ -413,12 +413,17 @@ export default function OperationsClient({
     marketing3: number;
     personalExpense: number;
     expenseDate: string;
+    totalCash?: number;
+    cashAfterExpenses?: number;
+    walletsBalances?: any[];
   } | null>(null);
 
   // Edit fields states
-  const [editTotalAmount, setEditTotalAmount] = useState("");
+  const [editTotalCash, setEditTotalCash] = useState("");
+  const [editWalletsBalances, setEditWalletsBalances] = useState<Record<string, string>>({});
+  const [editCampaignBalance, setEditCampaignBalance] = useState("");
+
   const [editMarketing1, setEditMarketing1] = useState("");
-  const [editMarketing2, setEditMarketing2] = useState("");
   const [editMarketing3, setEditMarketing3] = useState("");
   const [editPersonalExpense, setEditPersonalExpense] = useState("");
   const [editTransfers, setEditTransfers] = useState<TransferField[]>([]);
@@ -436,9 +441,22 @@ export default function OperationsClient({
       const res = await getExpenseReportForDate(dateVal);
       if (res.success && res.found && res.report) {
         setOriginalReport(res.report);
-        setEditTotalAmount(String(res.report.totalAmount));
+        setEditTotalCash(String(res.report.totalCash || ""));
+        
+        // Parse walletsBalances to editWalletsBalances mapping
+        const wBalances: Record<string, string> = {};
+        let campBal = "0";
+        (res.report.walletsBalances || []).forEach((w: any) => {
+          if (w.wallet_id === "campaign") {
+            campBal = String(w.balance);
+          } else {
+            wBalances[w.wallet_id] = String(w.balance);
+          }
+        });
+        setEditWalletsBalances(wBalances);
+        setEditCampaignBalance(campBal);
+
         setEditMarketing1(String(res.report.marketing1));
-        setEditMarketing2(String(res.report.marketing2));
         setEditMarketing3(String(res.report.marketing3));
         setEditPersonalExpense(String(res.report.personalExpense));
         setEditTransfers(
@@ -475,34 +493,45 @@ export default function OperationsClient({
     );
   };
 
-  // Edit Form Math Verification
-  const editCalculatedSum = React.useMemo(() => {
-    const m1 = parseFloat(editMarketing1) || 0;
-    const m2 = parseFloat(editMarketing2) || 0;
-    const m3 = parseFloat(editMarketing3) || 0;
-    const pers = parseFloat(editPersonalExpense) || 0;
-    const transSum = editTransfers.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
-    return m1 + m2 + m3 + pers + transSum;
-  }, [editMarketing1, editMarketing2, editMarketing3, editPersonalExpense, editTransfers]);
+  // Edit Form Math calculations
+  const editWalletsTotalCashWithoutCampaign = React.useMemo(() => {
+    return initialWallets.reduce((sum, w) => sum + (parseFloat(editWalletsBalances[w.id]) || 0), 0);
+  }, [editWalletsBalances, initialWallets]);
 
-  const editEnteredTotal = parseFloat(editTotalAmount) || 0;
-  const isEditMathMatching = Math.abs(editCalculatedSum - editEnteredTotal) < 0.01;
-  const showEditMathWarning = editTotalAmount !== "" && !isEditMathMatching;
-  const showEditMathSuccess = editTotalAmount !== "" && isEditMathMatching;
+  const editWalletsTotalCash = React.useMemo(() => {
+    const camp = parseFloat(editCampaignBalance) || 0;
+    return editWalletsTotalCashWithoutCampaign + camp;
+  }, [editWalletsTotalCashWithoutCampaign, editCampaignBalance]);
+
+  const editTransfersTotal = React.useMemo(() => {
+    return editTransfers.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+  }, [editTransfers]);
+
+  const editMarketing1Val = parseFloat(editMarketing1) || 0;
+  const editMarketing3Val = parseFloat(editMarketing3) || 0;
+  const editPersonalExpenseVal = parseFloat(editPersonalExpense) || 0;
+  const editTotalCashVal = parseFloat(editTotalCash) || 0;
+
+  const computedEditMarketing2 = React.useMemo(() => {
+    return editTotalCashVal - editWalletsTotalCash - editPersonalExpenseVal - editMarketing1Val - editMarketing3Val - editTransfersTotal;
+  }, [editTotalCashVal, editWalletsTotalCash, editPersonalExpenseVal, editMarketing1Val, editMarketing3Val, editTransfersTotal]);
+
+  const editTotalAmount = React.useMemo(() => {
+    return editPersonalExpenseVal + editMarketing1Val + computedEditMarketing2 + editMarketing3Val + editTransfersTotal;
+  }, [editPersonalExpenseVal, editMarketing1Val, computedEditMarketing2, editMarketing3Val, editTransfersTotal]);
+
+  const editCashAfterExpenses = React.useMemo(() => {
+    return editTotalCashVal - editPersonalExpenseVal - editTransfersTotal;
+  }, [editTotalCashVal, editPersonalExpenseVal, editTransfersTotal]);
 
   const handleEditRequestSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!originalReport) return;
-    if (!isEditMathMatching) {
-      showToast("مجموع الفلوس مش مساوي بعضه، ساويه الأول ودوس تاني.", "error");
+    if (computedEditMarketing2 < 0) {
+      showToast("قيمة مصاريف ماركتنج 2 سالبة في طلب التعديل. يرجى مراجعة المبالغ المكتوبة.", "error");
       return;
     }
-
-    const m1 = parseFloat(editMarketing1) || 0;
-    const m2 = parseFloat(editMarketing2) || 0;
-    const m3 = parseFloat(editMarketing3) || 0;
-    const pers = parseFloat(editPersonalExpense) || 0;
 
     const formattedTransfers = editTransfers
       .filter((t) => t.toAgentId && t.amount)
@@ -511,16 +540,32 @@ export default function OperationsClient({
         amount: parseFloat(t.amount) || 0,
       }));
 
+    const editWalletsPayload = [
+      ...initialWallets.map((w) => ({
+        wallet_id: w.id,
+        phone_number: w.phone_number,
+        balance: parseFloat(editWalletsBalances[w.id]) || 0,
+      })),
+      {
+        wallet_id: "campaign",
+        phone_number: "كامبين",
+        balance: parseFloat(editCampaignBalance) || 0,
+      }
+    ];
+
     startTransition(async () => {
       const res = await submitEditExpenseRequest(
         originalReport.id,
         {
-          totalAmount: editEnteredTotal,
-          marketing1: m1,
-          marketing2: m2,
-          marketing3: m3,
-          personalExpense: pers,
+          totalAmount: editTotalAmount,
+          marketing1: editMarketing1Val,
+          marketing2: computedEditMarketing2,
+          marketing3: editMarketing3Val,
+          personalExpense: editPersonalExpenseVal,
           transfers: formattedTransfers,
+          totalCash: editTotalCashVal,
+          cashAfterExpenses: editCashAfterExpenses,
+          walletsBalances: editWalletsPayload,
         },
         "" // No password confirm needed
       );
@@ -1323,340 +1368,494 @@ export default function OperationsClient({
   )}
 
       {activeTab === "edit-expenses" && (
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-6xl mx-auto animate-fade-in">
           {/* Edit Request Card Container */}
-          <div className="backdrop-blur-xl bg-brand-card/95 border border-brand-border/55 p-6 md:p-8 rounded-[24px] shadow-2xl relative">
-            <div className="space-y-1.5 mb-8 text-center md:text-right">
-              <h2 className="text-xl font-bold text-white flex items-center justify-center md:justify-start gap-2">
-                <span>طلب تعديل المصاريف والتحويلات اليومية</span>
-              </h2>
-              <p className="text-xs md:text-sm text-brand-dim leading-relaxed">
-                اختر التاريخ المسجل مسبقاً لعرض التقرير الحالي وطلب إجراء التعديلات عليه. سيتم إرسال طلبك للإدارة ولن يتم التحديث المباشر للمصاريف إلا بعد المراجعة والموافقة.
-              </p>
-            </div>
-
-            {/* Date Search Input */}
-            <div className="max-w-md mx-auto md:mx-0 space-y-2 mb-8">
-              <label htmlFor="editSearchDate" className="block text-sm font-bold text-white/90">
-                تاريخ التقرير المطلوب تعديله
-              </label>
-              <div className="relative">
-                <input
-                  id="editSearchDate"
-                  type="date"
-                  required
-                  disabled={isPending || isFetchingReport}
-                  min={tenDaysAgoStr}
-                  max={todayStr}
-                  value={editSearchDate}
-                  onChange={(e) => handleEditDateChange(e.target.value)}
-                  onClick={(e) => e.currentTarget.showPicker()}
-                  className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3 text-sm text-white focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter cursor-pointer"
-                />
-                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
-                  {isFetchingReport ? (
-                    <Loader2 size={16} className="animate-spin text-brand-accent" />
-                  ) : (
-                    <Calendar size={16} />
-                  )}
-                </span>
-              </div>
-            </div>
-
-            {/* Loading/Fetch State */}
-            {isFetchingReport && (
-              <div className="py-12 flex flex-col items-center justify-center space-y-4">
-                <Loader2 size={36} className="animate-spin text-brand-accent" />
-                <p className="text-sm text-brand-dim">جاري البحث وتحميل بيانات التقرير...</p>
-              </div>
-            )}
-
-            {/* Form Display */}
-            {!isFetchingReport && originalReport ? (
-              <form onSubmit={handleEditRequestSubmit} className="space-y-6 animate-scale-in" autoComplete="off">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                  
-                  {/* 1. Read-Only Original Date (تاريخ التقرير) */}
-                  <div className="space-y-2">
-                    <label className="block text-[13px] font-medium text-brand-dim opacity-70">
-                      تاريخ التقرير
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        readOnly
-                        value={originalReport.expenseDate}
-                        className="w-full bg-[#070814]/40 border border-brand-border/50 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 font-inter dir-ltr text-left select-none outline-none cursor-not-allowed"
-                      />
-                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
-                        <Calendar size={16} />
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 2. New Total Amount (إجمالي المصروفات والتحويلات الجديدة (التوتال)) */}
-                  <div className="space-y-2">
-                    <label htmlFor="editTotalAmount" className="block text-[13px] font-medium text-brand-dim">
-                      إجمالي المصروفات والتحويلات الجديدة (التوتال)
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="editTotalAmount"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        required
-                        disabled={isPending}
-                        value={editTotalAmount}
-                        onChange={(e) => setEditTotalAmount(e.target.value)}
-                        placeholder="0.00"
-                        className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
-                      />
-                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-brand-accent pointer-events-none">
-                        <ClipboardList size={16} />
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-brand-dim/60 block mt-1">
-                      * أدخل مجموع المصاريف والتحويلات المقترحة يدوياً للمطابقة.
-                    </span>
-                  </div>
-
-                  {/* 3. New Personal Expenses (المصاريف الشخصية الجديدة (ج.م)) */}
-                  <div className="space-y-2">
-                    <label htmlFor="editPersonalExpense" className="block text-[13px] font-medium text-brand-dim">
-                      المصاريف الشخصية الجديدة (ج.م)
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="editPersonalExpense"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        disabled={isPending}
-                        value={editPersonalExpense}
-                        onChange={(e) => setEditPersonalExpense(e.target.value)}
-                        placeholder="0.00"
-                        className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
-                      />
-                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
-                        <DollarSign size={16} />
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 4. New Marketing 1 (مصاريف ماركتنج 1 الجديدة (ج.م)) */}
-                  <div className="space-y-2">
-                    <label htmlFor="editMarketing1" className="block text-[13px] font-medium text-brand-dim">
-                      مصاريف ماركتنج 1 الجديدة (ج.م)
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="editMarketing1"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        disabled={isPending}
-                        value={editMarketing1}
-                        onChange={(e) => setEditMarketing1(e.target.value)}
-                        placeholder="0.00"
-                        className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
-                      />
-                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
-                        <Coins size={16} />
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 5. New Marketing 2 (مصاريف ماركتنج 2 الجديدة (ج.م)) */}
-                  <div className="space-y-2">
-                    <label htmlFor="editMarketing2" className="block text-[13px] font-medium text-brand-dim">
-                      مصاريف ماركتنج 2 الجديدة (ج.م)
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="editMarketing2"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        disabled={isPending}
-                        value={editMarketing2}
-                        onChange={(e) => setEditMarketing2(e.target.value)}
-                        placeholder="0.00"
-                        className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
-                      />
-                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
-                        <Coins size={16} />
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 6. New Marketing 3 (مصاريف ماركتنج 3 الجديدة (ج.م)) */}
-                  <div className="space-y-2">
-                    <label htmlFor="editMarketing3" className="block text-[13px] font-medium text-brand-dim">
-                      مصاريف ماركتنج 3 الجديدة (ج.م)
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="editMarketing3"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        disabled={isPending}
-                        value={editMarketing3}
-                        onChange={(e) => setEditMarketing3(e.target.value)}
-                        placeholder="0.00"
-                        className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
-                      />
-                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
-                        <Coins size={16} />
-                      </span>
-                    </div>
-                  </div>
-
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            
+            {/* Right Side: Edit Form (Span 2) */}
+            <div className="lg:col-span-2">
+              <div className="backdrop-blur-xl bg-brand-card/95 border border-brand-border/55 p-6 md:p-8 rounded-[24px] shadow-2xl relative">
+                <div className="space-y-1.5 mb-8 text-center md:text-right">
+                  <h2 className="text-xl font-bold text-white flex items-center justify-center md:justify-start gap-2">
+                    <span>طلب تعديل المصاريف والتحويلات اليومية</span>
+                  </h2>
+                  <p className="text-xs md:text-sm text-brand-dim leading-relaxed">
+                    اختر التاريخ المسجل مسبقاً لعرض التقرير الحالي وطلب إجراء التعديلات عليه. سيتم إرسال طلبك للإدارة ولن يتم التحديث المباشر للمصاريف إلا بعد المراجعة والموافقة.
+                  </p>
                 </div>
 
-                {/* Math Warning Banner */}
-                {showEditMathWarning && (
-                  <div className="bg-amber-500/10 border border-amber-500/25 text-amber-400 p-4 rounded-xl text-xs font-semibold flex items-center gap-3 animate-slide-in select-none">
-                    <AlertTriangle size={16} className="shrink-0" />
-                    <span>
-                      تنبيه المجموع غير متطابق: إجمالي المصروفات المقترح هو ({editEnteredTotal.toFixed(2)} ج.م)، بينما مجموع البنود والتحويلات المقترح الفعلي هو ({editCalculatedSum.toFixed(2)} ج.م).
+                {/* Date Search Input */}
+                <div className="max-w-md mx-auto md:mx-0 space-y-2 mb-8 text-right">
+                  <label htmlFor="editSearchDate" className="block text-sm font-bold text-white/90">
+                    تاريخ التقرير المطلوب تعديله
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="editSearchDate"
+                      type="date"
+                      required
+                      disabled={isPending || isFetchingReport}
+                      min={tenDaysAgoStr}
+                      max={todayStr}
+                      value={editSearchDate}
+                      onChange={(e) => handleEditDateChange(e.target.value)}
+                      onClick={(e) => e.currentTarget.showPicker()}
+                      className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3 text-sm text-white focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter cursor-pointer"
+                    />
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
+                      {isFetchingReport ? (
+                        <Loader2 size={16} className="animate-spin text-brand-accent" />
+                      ) : (
+                        <Calendar size={16} />
+                      )}
                     </span>
                   </div>
-                )}
-                {showEditMathSuccess && (
-                  <div className="bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 p-4 rounded-xl text-xs font-semibold flex items-center gap-3 animate-slide-in select-none">
-                    <CheckCircle2 size={16} className="shrink-0" />
-                    <span>الأرقام المقترحة متطابقة بشكل صحيح (المجموع: {editCalculatedSum.toFixed(2)} ج.م).</span>
+                </div>
+
+                {/* Loading/Fetch State */}
+                {isFetchingReport && (
+                  <div className="py-12 flex flex-col items-center justify-center space-y-4">
+                    <Loader2 size={36} className="animate-spin text-brand-accent" />
+                    <p className="text-sm text-brand-dim">جاري البحث وتحميل بيانات التقرير...</p>
                   </div>
                 )}
 
-                {/* Dynamic Custody Transfers Section */}
-                <div className="border-t border-brand-border/20 pt-6 mt-8 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-base font-bold text-white flex items-center gap-2">
-                      <Coins size={16} className="text-brand-accent" />
-                      <span>تحويلات العهدة المقترحة الجديدة</span>
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={addEditTransferRow}
-                      disabled={isPending}
-                      className="flex items-center gap-1.5 px-4.5 py-2 bg-brand-accent/15 border border-brand-accent/20 text-brand-accent hover:bg-brand-accent/25 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-95 disabled:opacity-50"
-                    >
-                      <Plus size={14} />
-                      <span>إضافة تحويل لزميل</span>
-                    </button>
-                  </div>
+                {/* Form Display */}
+                {!isFetchingReport && originalReport ? (
+                  <form onSubmit={handleEditRequestSubmit} className="space-y-6 animate-scale-in" autoComplete="off">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 text-right" dir="rtl">
+                      
+                      {/* 1. Read-Only Original Date (تاريخ التقرير) */}
+                      <div className="space-y-2 text-right">
+                        <label className="block text-[13px] font-medium text-brand-dim opacity-70">
+                          تاريخ التقرير
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            readOnly
+                            value={originalReport.expenseDate}
+                            className="w-full bg-[#070814]/40 border border-brand-border/50 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 font-inter dir-ltr text-left select-none outline-none cursor-not-allowed"
+                          />
+                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
+                            <Calendar size={16} />
+                          </span>
+                        </div>
+                      </div>
 
-                  {editTransfers.length > 0 ? (
-                    <div className="space-y-3.5">
-                      {editTransfers.map((field, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center gap-3 bg-[#070814]/30 border border-brand-border/40 p-3 rounded-2xl animate-slide-down flex-wrap sm:flex-nowrap"
+                      {/* 2. Editable Total Cash (توتال الكاش (ج.م)) */}
+                      <div className="space-y-2 text-right">
+                        <label htmlFor="editTotalCash" className="block text-[13px] font-medium text-brand-dim font-cairo font-semibold">
+                          توتال الكاش المقترح (ج.م)
+                        </label>
+                        <div className="relative">
+                          <input
+                            id="editTotalCash"
+                            type="number"
+                            step="0.01"
+                            required
+                            disabled={isPending}
+                            value={editTotalCash}
+                            onChange={(e) => setEditTotalCash(e.target.value)}
+                            placeholder="0.00"
+                            className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
+                          />
+                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
+                            <Wallet size={16} />
+                          </span>
+                        </div>
+                        {editWalletsTotalCash > 0 && (
+                          <div className="flex justify-end mt-1">
+                            <button
+                              type="button"
+                              onClick={() => setEditTotalCash(String(editWalletsTotalCash))}
+                              className="text-[10px] text-emerald-400 hover:text-emerald-300 transition-colors font-semibold flex items-center gap-1 cursor-pointer"
+                            >
+                              <span>تعبئة من المحافظ ({editWalletsTotalCash.toLocaleString("en-US")} ج.م)</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 3. Read-Only Total Cash after Expenses */}
+                      <div className="space-y-2 text-right">
+                        <label htmlFor="editCashAfterExpenses" className="block text-[13px] font-medium text-brand-dim font-cairo font-semibold">
+                          توتال الكاش بعد خصم التحويلات والمصاريف الشخصية المقترح (ج.م)
+                        </label>
+                        <div className="relative">
+                          <input
+                            id="editCashAfterExpenses"
+                            type="text"
+                            readOnly
+                            disabled={isPending}
+                            value={editTotalCash !== "" ? editCashAfterExpenses.toFixed(2) : "0.00"}
+                            placeholder="0.00"
+                            className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
+                          />
+                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
+                            <Coins size={16} />
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 4. Read-Only computed editTotalAmount */}
+                      <div className="space-y-2 text-right">
+                        <label htmlFor="editTotalAmount" className="block text-[13px] font-medium text-brand-dim font-cairo font-semibold">
+                          إجمالي مصروفات المحفظة المقترح (ج.م) *تلقائي
+                        </label>
+                        <div className="relative">
+                          <input
+                            id="editTotalAmount"
+                            type="text"
+                            readOnly
+                            disabled={isPending}
+                            value={editTotalCash !== "" ? editTotalAmount.toFixed(2) : "0.00"}
+                            placeholder="0.00"
+                            className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
+                          />
+                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
+                            <ClipboardList size={16} />
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 5. Personal Expenses */}
+                      <div className="space-y-2 text-right">
+                        <label htmlFor="editPersonalExpense" className="block text-[13px] font-medium text-brand-dim">
+                          المصاريف الشخصية المقترحة (ج.م)
+                        </label>
+                        <div className="relative">
+                          <input
+                            id="editPersonalExpense"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            disabled={isPending}
+                            value={editPersonalExpense}
+                            onChange={(e) => setEditPersonalExpense(e.target.value)}
+                            placeholder="0.00"
+                            className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
+                          />
+                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
+                            <DollarSign size={16} />
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 6. Marketing 1 */}
+                      <div className="space-y-2 text-right">
+                        <label htmlFor="editMarketing1" className="block text-[13px] font-medium text-brand-dim">
+                          مصاريف ماركتنج 1 المقترحة (ج.م)
+                        </label>
+                        <div className="relative">
+                          <input
+                            id="editMarketing1"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            disabled={isPending}
+                            value={editMarketing1}
+                            onChange={(e) => setEditMarketing1(e.target.value)}
+                            placeholder="0.00"
+                            className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
+                          />
+                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
+                            <Coins size={16} />
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 7. Marketing 3 */}
+                      <div className="space-y-2 text-right">
+                        <label htmlFor="editMarketing3" className="block text-[13px] font-medium text-brand-dim">
+                          مصاريف ماركتنج 3 المقترحة (ج.م)
+                        </label>
+                        <div className="relative">
+                          <input
+                            id="editMarketing3"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            disabled={isPending}
+                            value={editMarketing3}
+                            onChange={(e) => setEditMarketing3(e.target.value)}
+                            placeholder="0.00"
+                            className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
+                          />
+                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
+                            <Coins size={16} />
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 8. Read-only dynamic Marketing 2 */}
+                      <div className="space-y-2 text-right">
+                        <label htmlFor="editMarketing2" className="block text-[13px] font-medium text-brand-dim font-cairo font-semibold">
+                          مصاريف ماركتنج 2 المقترحة (ج.م) *تلقائي
+                        </label>
+                        <div className="relative">
+                          <input
+                            id="editMarketing2"
+                            type="text"
+                            readOnly
+                            disabled={isPending}
+                            value={editTotalCash !== "" ? computedEditMarketing2.toFixed(2) : "0.00"}
+                            placeholder="0.00"
+                            className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
+                          />
+                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
+                            <Coins size={16} />
+                          </span>
+                        </div>
+                      </div>
+
+                    </div>
+
+                    {/* Dynamic Custody Transfers Section */}
+                    <div className="border-t border-brand-border/20 pt-6 mt-8 space-y-4 text-right">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-base font-bold text-white flex items-center gap-2">
+                          <Coins size={16} className="text-brand-accent" />
+                          <span>تحويلات العهدة المقترحة الجديدة</span>
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={addEditTransferRow}
+                          disabled={isPending}
+                          className="flex items-center gap-1.5 px-4.5 py-2 bg-brand-accent/15 border border-brand-accent/20 text-brand-accent hover:bg-brand-accent/25 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-95 disabled:opacity-50"
                         >
-                          {/* Colleague Selection */}
-                          <div className="flex-1 min-w-[200px] space-y-1">
-                            <div className="relative">
-                              <select
-                                required
+                          <Plus size={14} />
+                          <span>إضافة تحويل لزميل</span>
+                        </button>
+                      </div>
+
+                      {editTransfers.length > 0 ? (
+                        <div className="space-y-3.5">
+                          {editTransfers.map((field, idx) => (
+                            <div
+                              key={idx}
+                              className="flex items-center gap-3 bg-[#070814]/30 border border-brand-border/40 p-3 rounded-2xl animate-slide-down flex-wrap sm:flex-nowrap"
+                            >
+                              {/* Colleague Selection */}
+                              <div className="flex-1 min-w-[200px] space-y-1">
+                                <div className="relative">
+                                  <select
+                                    required
+                                    disabled={isPending}
+                                    value={field.toAgentId}
+                                    onChange={(e) => updateEditTransferRow(idx, "toAgentId", e.target.value)}
+                                    className="w-full bg-[#070814] border border-brand-border rounded-xl px-4 py-3.5 text-xs text-white focus:outline-none focus:border-brand-accent transition-all cursor-pointer appearance-none pr-10"
+                                  >
+                                    <option value="">اختر الموظف...</option>
+                                    {colleagues.map((c) => (
+                                      <option key={c.id} value={c.id}>
+                                        {c.full_name} ({c.role === "senioragent" ? "Senior Agent" : "موظف"})
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
+                                    <User size={14} />
+                                  </span>
+                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
+                                    <ChevronDown size={14} />
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Transfer Amount */}
+                              <div className="w-full sm:w-44 space-y-1">
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0.01"
+                                    required
+                                    disabled={isPending}
+                                    placeholder="مبلغ التحويل"
+                                    value={field.amount}
+                                    onChange={(e) => updateEditTransferRow(idx, "amount", e.target.value)}
+                                    className="w-full bg-[#070814] border border-brand-border rounded-xl pl-4 pr-9 py-3.5 text-xs text-white focus:outline-none focus:border-brand-accent transition-all text-left dir-ltr font-inter"
+                                  />
+                                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none font-bold text-xs select-none">
+                                    $
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Delete Row */}
+                              <button
+                                type="button"
+                                onClick={() => removeEditTransferRow(idx)}
                                 disabled={isPending}
-                                value={field.toAgentId}
-                                onChange={(e) => updateEditTransferRow(idx, "toAgentId", e.target.value)}
-                                className="w-full bg-[#070814] border border-brand-border rounded-xl px-4 py-3.5 text-xs text-white focus:outline-none focus:border-brand-accent transition-all cursor-pointer appearance-none pr-10"
+                                className="w-10 h-10 flex items-center justify-center bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/25 hover:text-white rounded-xl transition-all cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
                               >
-                                <option value="">اختر الموظف...</option>
-                                {colleagues.map((c) => (
-                                  <option key={c.id} value={c.id}>
-                                    {c.full_name} ({c.role === "senioragent" ? "Senior Agent" : "موظف"})
-                                  </option>
-                                ))}
-                              </select>
-                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
-                                <User size={14} />
-                              </span>
-                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
-                                <ChevronDown size={14} />
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {/* Submit button */}
+                    <div className="border-t border-brand-border/20 pt-6 mt-8">
+                      <button
+                        type="submit"
+                        disabled={isPending}
+                        className="w-full flex items-center justify-center gap-2 px-5 py-3.5 bg-brand-accent hover:bg-brand-accent/95 disabled:bg-brand-accent/50 text-white font-bold rounded-xl transition-all duration-300 shadow-[0_0_15px_rgba(139,92,246,0.3)] hover:shadow-[0_0_25px_rgba(139,92,246,0.45)] active:scale-[0.98] disabled:scale-100 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        {isPending ? (
+                          <>
+                            <Loader2 size={18} className="animate-spin" />
+                            <span>جاري تقديم الطلب...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Send size={16} className="rotate-180" />
+                            <span>تقديم طلب التعديل للإدارة</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                  </form>
+                ) : (
+                  /* Empty state placeholder when no date is selected or fetching failed */
+                  !isFetchingReport && (
+                    <div className="border border-dashed border-brand-border/40 rounded-[24px] bg-brand-card/20 py-20 text-center select-none animate-fade-in mt-6">
+                      <div className="flex flex-col items-center justify-center space-y-5 max-w-sm mx-auto">
+                        <div className="w-14 h-14 rounded-2xl bg-white/[0.01] border border-brand-border/30 text-brand-dim/40 flex items-center justify-center shadow-inner">
+                          <Calendar size={28} />
+                        </div>
+                        <div className="space-y-2">
+                          <h4 className="text-base font-bold text-white">يرجى اختيار تاريخ للبدء</h4>
+                          <p className="text-xs text-brand-dim/70 leading-relaxed">
+                            يرجى تحديد تاريخ اليوم المالي المطلوب طلب تعديله لعرض تقريره الأصلي وإضافة التعديلات المقترحة (متاح حتى آخر 10 أيام مضت).
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+
+            {/* Left Side: Edit Active Wallets balances snapshot (Span 1) */}
+            <div className="lg:col-span-1">
+              {!isFetchingReport && originalReport ? (
+                <div className="backdrop-blur-xl bg-brand-card/95 border border-brand-border/55 p-6 md:p-8 rounded-[24px] shadow-2xl relative min-h-[480px] flex flex-col justify-between animate-scale-in">
+                  <div>
+                    {/* Header */}
+                    <div className="border-b border-brand-border/25 pb-4 mb-5 text-right">
+                      <h2 className="text-base md:text-lg font-extrabold text-white flex items-center justify-start gap-2">
+                        <span className="text-brand-accent">3.</span> محافظ الكاش المقترحة
+                      </h2>
+                      <p className="text-[10px] text-brand-dim/60 leading-relaxed mt-2 font-cairo">
+                        تعديل رصيد كاش المحافظ الفعلي المقترح لنفس اليوم المالي المحدد.
+                      </p>
+                    </div>
+
+                    {/* Scrollable Wallets List */}
+                    {initialWallets.length > 0 ? (
+                      <div className="space-y-3.5 max-h-[320px] overflow-y-auto pr-1.5 custom-scrollbar">
+                        {initialWallets.map((wallet) => (
+                          <div
+                            key={wallet.id}
+                            className="px-4.5 py-2.5 rounded-xl bg-[#090b16]/90 border border-brand-border/30 hover:border-brand-accent/25 transition-all flex items-center justify-between gap-3 text-right"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(wallet.phone_number);
+                                  showToast("تم نسخ رقم المحفظة إلى الحافظة بنجاح.", "success");
+                                }}
+                                className="text-white/30 hover:text-white transition-colors cursor-pointer"
+                                title="نسخ رقم الهاتف"
+                              >
+                                <Copy size={12} />
+                              </button>
+                              <span className="text-xs font-bold text-white font-inter dir-ltr select-all">
+                                {wallet.phone_number}
                               </span>
                             </div>
-                          </div>
-
-                          {/* Transfer Amount */}
-                          <div className="w-full sm:w-44 space-y-1">
-                            <div className="relative">
+                            <div className="relative w-28">
                               <input
                                 type="number"
                                 step="0.01"
-                                min="0.01"
+                                min="0"
                                 required
                                 disabled={isPending}
-                                placeholder="مبلغ التحويل"
-                                value={field.amount}
-                                onChange={(e) => updateEditTransferRow(idx, "amount", e.target.value)}
-                                className="w-full bg-[#070814] border border-brand-border rounded-xl pl-4 pr-9 py-3.5 text-xs text-white focus:outline-none focus:border-brand-accent transition-all text-left dir-ltr font-inter"
+                                value={editWalletsBalances[wallet.id] || ""}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setEditWalletsBalances((prev) => ({
+                                    ...prev,
+                                    [wallet.id]: val,
+                                  }));
+                                }}
+                                placeholder="0.00"
+                                className="w-full bg-[#070814]/80 border border-brand-border rounded-xl pl-3 pr-8 py-2 text-xs text-white focus:outline-none focus:border-brand-accent transition-all text-left dir-ltr font-inter"
                               />
-                              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none font-bold text-xs select-none">
-                                $
+                              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none font-bold text-[10px]">
+                                ج.م
                               </span>
                             </div>
                           </div>
+                        ))}
 
-                          {/* Delete Row */}
-                          <button
-                            type="button"
-                            onClick={() => removeEditTransferRow(idx)}
-                            disabled={isPending}
-                            className="w-10 h-10 flex items-center justify-center bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/25 hover:text-white rounded-xl transition-all cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                        {/* Special Campaign Row inside active wallets scroll area */}
+                        <div className="px-4.5 py-2.5 rounded-xl bg-brand-accent/5 border border-brand-accent/40 hover:border-brand-accent/65 transition-all flex items-center justify-between gap-3 text-right">
+                          <div className="flex items-center gap-2.5">
+                            <span className="relative flex h-2 w-2 select-none">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-accent opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-accent"></span>
+                            </span>
+                            <span className="text-xs font-extrabold text-brand-accent flex items-center gap-1.5 select-none font-cairo">
+                              <Megaphone size={13} className="shrink-0 text-brand-accent" />
+                              <span>كامبين</span>
+                            </span>
+                          </div>
+                          <div className="relative w-28">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              disabled={isPending}
+                              value={editCampaignBalance}
+                              onChange={(e) => setEditCampaignBalance(e.target.value)}
+                              placeholder="0.00"
+                              className="w-full bg-[#070814]/80 border border-brand-accent/40 rounded-xl pl-3 pr-8 py-2 text-xs text-white focus:outline-none focus:border-brand-accent transition-all text-left dir-ltr font-inter font-extrabold"
+                            />
+                            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-accent pointer-events-none font-bold text-[10px]">
+                              ج.م
+                            </span>
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
 
-                {/* Submit button */}
-                <div className="border-t border-brand-border/20 pt-6 mt-8">
-                  <button
-                    type="submit"
-                    disabled={isPending}
-                    className="w-full flex items-center justify-center gap-2 px-5 py-3.5 bg-brand-accent hover:bg-brand-accent/95 disabled:bg-brand-accent/50 text-white font-bold rounded-xl transition-all duration-300 shadow-[0_0_15px_rgba(139,92,246,0.3)] hover:shadow-[0_0_25px_rgba(139,92,246,0.45)] active:scale-[0.98] disabled:scale-100 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    {isPending ? (
-                      <>
-                        <Loader2 size={18} className="animate-spin" />
-                        <span>جاري تقديم الطلب...</span>
-                      </>
+                      </div>
                     ) : (
-                      <>
-                        <Send size={16} className="rotate-180" />
-                        <span>تقديم طلب التعديل للإدارة</span>
-                      </>
+                      <div className="text-center py-8 text-xs text-brand-dim/40 select-none">
+                        لا توجد محافظ كاش مسجلة للعميل.
+                      </div>
                     )}
-                  </button>
-                </div>
+                  </div>
 
-              </form>
-            ) : (
-              /* Empty state placeholder when no date is selected or fetching failed */
-              !isFetchingReport && (
-                <div className="border border-dashed border-brand-border/40 rounded-[24px] bg-brand-card/20 py-20 text-center select-none animate-fade-in mt-6">
-                  <div className="flex flex-col items-center justify-center space-y-5 max-w-sm mx-auto">
-                    <div className="w-14 h-14 rounded-2xl bg-white/[0.01] border border-brand-border/30 text-brand-dim/40 flex items-center justify-center shadow-inner">
-                      <Calendar size={28} />
+                  {/* Summary displays */}
+                  <div className="border-t border-brand-border/25 pt-4 mt-4 space-y-2 select-none">
+                    <div className="flex justify-between items-center text-xs font-semibold text-brand-dim">
+                      <span>إجمالي كاش المحافظ:</span>
+                      <span className="text-white font-inter font-bold">{editWalletsTotalCash.toLocaleString("en-US")} ج.م</span>
                     </div>
-                    <div className="space-y-2">
-                      <h4 className="text-base font-bold text-white">يرجى اختيار تاريخ للبدء</h4>
-                      <p className="text-xs text-brand-dim/70 leading-relaxed">
-                        يرجى تحديد تاريخ اليوم المالي المطلوب طلب تعديله لعرض تقريره الأصلي وإضافة التعديلات المقترحة (متاح حتى آخر 10 أيام مضت).
-                      </p>
+                    <div className="flex justify-between items-center text-xs font-semibold text-brand-dim">
+                      <span>إجمالي كاش المحافظ بدون الكامبين:</span>
+                      <span className="text-brand-accent font-inter font-bold">{editWalletsTotalCashWithoutCampaign.toLocaleString("en-US")} ج.م</span>
                     </div>
                   </div>
                 </div>
-              )
-            )}
+              ) : null}
+            </div>
+
           </div>
         </div>
       )}

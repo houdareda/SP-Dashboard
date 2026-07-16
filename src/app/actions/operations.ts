@@ -45,6 +45,9 @@ export interface EditExpensesRequestInput {
   marketing3: number;
   personalExpense: number;
   transfers: { to_agent_id: string; amount: number }[];
+  totalCash?: number;
+  cashAfterExpenses?: number;
+  walletsBalances?: { wallet_id: string; phone_number: string; balance: number }[];
 }
 
 export interface FundRequestInput {
@@ -467,6 +470,9 @@ export async function getExpenseReportForDate(dateStr: string) {
         marketing3: Number(expense.marketing_3) || 0,
         personalExpense: Number(expense.personal_expense) || 0,
         expenseDate: expense.expense_date,
+        totalCash: Number(expense.total_cash) || 0,
+        cashAfterExpenses: Number(expense.cash_after_expenses) || 0,
+        walletsBalances: expense.wallets_balances || [],
       },
       transfers: (transfers || []).map((t) => ({
         toAgentId: t.to_agent_id,
@@ -585,7 +591,9 @@ export async function submitEditExpenseRequest(
       }
     }
 
-    const hasAnyChanges = isPersonalChanged || isMarketing1Changed || isMarketing2Changed || isMarketing3Changed || isTotalChanged || isTransfersChanged;
+    const isTotalCashChanged = requestedChanges.totalCash !== undefined && Number(requestedChanges.totalCash) !== Number(originalExpense.total_cash);
+
+    const hasAnyChanges = isPersonalChanged || isMarketing1Changed || isMarketing2Changed || isMarketing3Changed || isTotalChanged || isTransfersChanged || isTotalCashChanged;
 
     if (!hasAnyChanges) {
       return { success: false, error: "لم تقم بتعديل أي قيم. يجب تغيير قيمة واحدة على الأقل لتقديم طلب تعديل." };
@@ -602,6 +610,9 @@ export async function submitEditExpenseRequest(
         to_agent_id: t.to_agent_id,
         amount: t.amount,
       })),
+      total_cash: requestedChanges.totalCash !== undefined ? requestedChanges.totalCash : Number(originalExpense.total_cash || 0),
+      cash_after_expenses: requestedChanges.cashAfterExpenses !== undefined ? requestedChanges.cashAfterExpenses : Number(originalExpense.cash_after_expenses || 0),
+      wallets_balances: requestedChanges.walletsBalances || originalExpense.wallets_balances || [],
     };
 
     // 3. Insert pending request
@@ -817,9 +828,7 @@ export async function getAgentDailyExpensesPaginated(params: {
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "غير مصرح بالعملية" };
 
-    const supabase = await createClient();
-
-    let query = supabase
+    let query = supabaseAdmin
       .from("daily_expenses")
       .select("*", { count: "exact" })
       .eq("agent_id", user.id);
@@ -845,6 +854,9 @@ export async function getAgentDailyExpensesPaginated(params: {
       marketing_2: exp.marketing_2,
       marketing_3: exp.marketing_3,
       personal_expense: exp.personal_expense,
+      total_cash: exp.total_cash,
+      cash_after_expenses: exp.cash_after_expenses,
+      wallets_balances: exp.wallets_balances,
     }));
 
     return { success: true, data: formattedData, totalCount: count || 0 };
@@ -954,5 +966,39 @@ export async function getAgentCurrentCustody(agentId: string): Promise<number> {
   } catch (err) {
     console.error("Error calculating current custody for agent:", err);
     return 0;
+  }
+}
+
+/**
+ * Action: Get transfers associated with a daily expense ID
+ */
+export async function getExpenseTransfers(expenseId: string) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "غير مصرح بالعملية" };
+
+    const { data, error } = await supabaseAdmin
+      .from("expense_transfers")
+      .select(`
+        id,
+        amount,
+        to_agent_id,
+        to_agent:profiles!expense_transfers_to_agent_id_fkey(full_name)
+      `)
+      .eq("expense_id", expenseId);
+
+    if (error) throw error;
+    
+    const formatted = (data || []).map((t: any) => ({
+      id: t.id,
+      amount: t.amount,
+      toAgentId: t.to_agent_id,
+      toAgentName: t.to_agent?.full_name || "موظف",
+    }));
+
+    return { success: true, transfers: formatted };
+  } catch (err: any) {
+    console.error("getExpenseTransfers error:", err);
+    return { success: false, error: err.message, transfers: [] };
   }
 }

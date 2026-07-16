@@ -48,6 +48,9 @@ export interface EditExpenseRequestData {
     marketing_3: number;
     personal_expense: number;
     transfers: { to_agent_id: string; amount: number }[];
+    total_cash?: number;
+    cash_after_expenses?: number;
+    wallets_balances?: { wallet_id: string; phone_number: string; balance: number }[];
   };
   original_transfers: {
     id: string;
@@ -69,6 +72,9 @@ export interface EditExpenseRequestData {
     marketing_2: number;
     marketing_3: number;
     total_amount: number;
+    total_cash?: number;
+    cash_after_expenses?: number;
+    wallets_balances?: { wallet_id: string; phone_number: string; balance: number }[];
   } | null;
 }
 
@@ -562,16 +568,6 @@ export async function reviewEditRequest(
         return { success: false, error: "التغييرات المقترحة فارغة." };
       }
 
-      // Fetch current total_cash for this daily_expenses record to keep cash_after_expenses in sync
-      const { data: currentExpense } = await supabaseAdmin
-        .from("daily_expenses")
-        .select("total_cash")
-        .eq("id", expenseId)
-        .single();
-        
-      const currentTotalCash = Number(currentExpense?.total_cash || 0);
-      const newCashAfterExpenses = currentTotalCash - Number(newChanges.total_amount);
-
       // Step A: Update the base record inside daily_expenses
       const { error: updateExpenseError } = await supabaseAdmin
         .from("daily_expenses")
@@ -581,7 +577,9 @@ export async function reviewEditRequest(
           marketing_2: Number(newChanges.marketing_2) || 0,
           marketing_3: Number(newChanges.marketing_3) || 0,
           personal_expense: Number(newChanges.personal_expense) || 0,
-          cash_after_expenses: newCashAfterExpenses,
+          total_cash: Number(newChanges.total_cash) || 0,
+          cash_after_expenses: Number(newChanges.cash_after_expenses) || 0,
+          wallets_balances: newChanges.wallets_balances || [],
         })
         .eq("id", expenseId);
 
@@ -776,7 +774,7 @@ export async function getManagementHistory() {
       .select(`
         *,
         agent:profiles!edit_expense_requests_agent_id_fkey(id, full_name),
-        expense:daily_expenses(id, agent_id, expense_date, personal_expense, marketing_1, marketing_2, marketing_3, total_amount),
+        expense:daily_expenses(id, agent_id, expense_date, personal_expense, marketing_1, marketing_2, marketing_3, total_amount, total_cash, cash_after_expenses, wallets_balances),
         reviewer:profiles!edit_expense_requests_reviewed_by_fkey(full_name)
       `)
       .order("created_at", { ascending: false });
@@ -935,6 +933,9 @@ export async function getAdminDailyExpensesPaginated(params: {
       marketing_2: exp.marketing_2,
       marketing_3: exp.marketing_3,
       personal_expense: exp.personal_expense,
+      total_cash: exp.total_cash,
+      cash_after_expenses: exp.cash_after_expenses,
+      wallets_balances: exp.wallets_balances,
       agent: exp.agent,
     }));
 
@@ -975,7 +976,7 @@ export async function getAdminEditRequestsPaginated(params: {
       .select(`
         *,
         agent:profiles!edit_expense_requests_agent_id_fkey(id, full_name),
-        expense:daily_expenses(id, agent_id, expense_date, personal_expense, marketing_1, marketing_2, marketing_3, total_amount),
+        expense:daily_expenses(id, agent_id, expense_date, personal_expense, marketing_1, marketing_2, marketing_3, total_amount, total_cash, cash_after_expenses, wallets_balances),
         reviewer:profiles!edit_expense_requests_reviewed_by_fkey(full_name)
       `, { count: "exact" });
 
