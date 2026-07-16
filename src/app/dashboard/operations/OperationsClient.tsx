@@ -174,7 +174,6 @@ export default function OperationsClient({
   // TAB 2: DAILY EXPENSES & TRANSFERS STATES & LOGIC
   // ----------------------------------------------------
   const [expenseDate, setExpenseDate] = useState("");
-  const [totalAmount, setTotalAmount] = useState("");
   const [marketing1, setMarketing1] = useState("");
   const [marketing3, setMarketing3] = useState("");
   const [personalExpense, setPersonalExpense] = useState("");
@@ -192,13 +191,16 @@ export default function OperationsClient({
 
   const [campaignBalance, setCampaignBalance] = useState("");
 
-  const walletsTotalCash = React.useMemo(() => {
-    const wSum = Object.keys(walletsBalances).reduce((sum, walletId) => {
+  const walletsTotalCashWithoutCampaign = React.useMemo(() => {
+    return Object.keys(walletsBalances).reduce((sum, walletId) => {
       return sum + (parseFloat(walletsBalances[walletId]) || 0);
     }, 0);
+  }, [walletsBalances]);
+
+  const walletsTotalCash = React.useMemo(() => {
     const camp = parseFloat(campaignBalance) || 0;
-    return wSum + camp;
-  }, [walletsBalances, campaignBalance]);
+    return walletsTotalCashWithoutCampaign + camp;
+  }, [walletsTotalCashWithoutCampaign, campaignBalance]);
 
   const [totalCash, setTotalCash] = useState("");
 
@@ -274,26 +276,22 @@ export default function OperationsClient({
     );
   };
 
-  const calculatedSum = React.useMemo(() => {
+  const pers = parseFloat(personalExpense) || 0;
+  const transSum = transfers.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+  const totalAmount = React.useMemo(() => {
     const m1 = parseFloat(marketing1) || 0;
     const m2 = calculatedMarketing2;
     const m3 = parseFloat(marketing3) || 0;
-    const pers = parseFloat(personalExpense) || 0;
-    const transSum = transfers.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
     return m1 + m2 + m3 + pers + transSum;
-  }, [marketing1, calculatedMarketing2, marketing3, personalExpense, transfers]);
-
-  const enteredTotal = parseFloat(totalAmount) || 0;
-  const isMathMatching = Math.abs(calculatedSum - enteredTotal) < 0.01;
+  }, [marketing1, calculatedMarketing2, marketing3, pers, transSum]);
 
   const enteredTotalCash = parseFloat(totalCash) || 0;
-  const enteredTotalAmount = parseFloat(totalAmount) || 0;
-  const cashAfterExpenses = totalCash !== "" ? (enteredTotalCash - enteredTotalAmount) : 0;
+  const cashAfterExpenses = totalCash !== "" ? (enteredTotalCash - pers - transSum) : 0;
 
-  const isWalletsMatch = Math.abs(cashAfterExpenses - walletsTotalCash) < 0.01;
-
-  const showMathWarning = (totalAmount !== "" && closingPassword.length > 0) && (!isMathMatching || (walletsTotalCash > 0 && !isWalletsMatch));
-  const showMathSuccess = (totalAmount !== "" && closingPassword.length > 0) && isMathMatching && (walletsTotalCash === 0 || isWalletsMatch);
+  const m1 = parseFloat(marketing1) || 0;
+  const m3 = parseFloat(marketing3) || 0;
+  const totalMarketing = m1 + calculatedMarketing2 + m3;
 
   const handleExpensesSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -329,18 +327,15 @@ export default function OperationsClient({
       return;
     }
 
-    if (totalAmount === "" || enteredTotal < 0) {
-      showToast("يرجى إدخال إجمالي مصروفات صحيح.", "error");
+    if (totalAmount < 0) {
+      showToast("إجمالي مصروفات المحفظة لا يمكن أن يكون سالباً.", "error");
       return;
     }
-    if (!isMathMatching) {
-      showToast("إجمالي مصروفات المحفظة غير متطابق مع مجموع المصاريف وتحويلات العهدة للزملاء.", "error");
+    if (calculatedMarketing2 < 0) {
+      showToast("قيمة مصاريف ماركتنج 2 سالبة. يرجى التأكد من أن مجموع المصاريف والتحويلات الأخرى لا يتجاوز الكاش المصروف.", "error");
       return;
     }
-    if (walletsTotalCash > 0 && !isWalletsMatch) {
-      showToast("الكاش المتبقي (التوتال واليت) غير متطابق مع إجمالي كاش المحافظ. يرجى ضبط الأرقام للمطابقة.", "error");
-      return;
-    }
+
     if (!closingPassword || closingPassword.trim() === "") {
       showToast("يرجى إدخال كلمة المرور لتأكيد إغلاق اليوم المالي.", "error");
       return;
@@ -375,7 +370,7 @@ export default function OperationsClient({
       const res = await submitDailyExpenses(
         {
           expenseDate,
-          totalAmount: enteredTotal,
+          totalAmount: totalAmount,
           marketing1: m1,
           marketing2: m2,
           marketing3: m3,
@@ -390,7 +385,6 @@ export default function OperationsClient({
 
       if (res.success) {
         showToast("تم إغلاق اليوم المالي بنجاح وحفظ كافة المصروفات والتحويلات.", "success");
-        setTotalAmount("");
         setMarketing1("");
         setMarketing3("");
         setPersonalExpense("");
@@ -934,33 +928,26 @@ export default function OperationsClient({
                       <div className="relative">
                         <input
                           id="totalAmount"
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          required
+                          type="text"
+                          readOnly
                           disabled={isPending}
-                          value={totalAmount}
-                          onChange={(e) => setTotalAmount(e.target.value)}
+                          value={totalCash !== "" ? totalAmount.toFixed(2) : "0.00"}
                           placeholder="0.00"
-                          className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
+                          className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
                         />
                         <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-brand-accent pointer-events-none">
                           <ClipboardList size={16} />
                         </span>
                       </div>
                       <span className="text-[10px] text-brand-dim/60 block mt-1 select-none">
-                        * أدخل مجموع المصاريف والتحويلات يدوياً للتحقق والمطابقة.
+                        * يتم احتسابه تلقائياً: مجموع المصاريف والتحويلات للزملاء.
                       </span>
                     </div>
 
-                    {/* 4. Total Cash after Expenses (الكاش المتبقي (توتال واليت)) */}
+                    {/* 4. Total Cash after Expenses (توتال الكاش بعد خصم التحويلات والمصاريف الشخصية) */}
                     <div className="space-y-2">
-                      <label htmlFor="cashAfterExpenses" className={`block text-[13px] font-medium font-cairo font-semibold transition-colors duration-300 ${
-                        !isWalletsMatch && totalCash !== "" && totalAmount !== "" && walletsTotalCash > 0
-                          ? "text-rose-400 font-bold"
-                          : "text-brand-dim"
-                      }`}>
-                        الكاش المتبقي (التوتال واليت) (ج.م)
+                      <label htmlFor="cashAfterExpenses" className="block text-[13px] font-medium text-brand-dim font-cairo font-semibold">
+                        توتال الكاش بعد خصم التحويلات والمصاريف الشخصية (ج.م)
                       </label>
                       <div className="relative">
                         <input
@@ -970,25 +957,12 @@ export default function OperationsClient({
                           disabled={isPending}
                           value={totalCash !== "" ? cashAfterExpenses.toFixed(2) : "0.00"}
                           placeholder="0.00"
-                          className={`w-full bg-[#070814]/40 border rounded-xl pl-4 pr-11 py-3.5 text-sm transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed ${
-                            !isWalletsMatch && totalCash !== "" && totalAmount !== "" && walletsTotalCash > 0
-                              ? "border-rose-500/55 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.15)]"
-                              : "border-brand-border/40 text-white/60"
-                          }`}
+                          className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
                         />
-                        <span className={`absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none transition-colors duration-300 ${
-                          !isWalletsMatch && totalCash !== "" && totalAmount !== "" && walletsTotalCash > 0
-                            ? "text-rose-400"
-                            : "text-white/20"
-                        }`}>
+                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
                           <Coins size={16} />
                         </span>
                       </div>
-                      {!isWalletsMatch && totalCash !== "" && totalAmount !== "" && walletsTotalCash > 0 && (
-                        <span className="text-[10px] text-rose-400 font-bold block mt-1 select-none animate-pulse">
-                          ⚠️ غير متطابق مع إجمالي كاش المحافظ (الفرق: {(cashAfterExpenses - walletsTotalCash).toFixed(2)} ج.م)
-                        </span>
-                      )}
                     </div>
 
                     {/* 5. Personal Expenses (المصاريف الشخصية (ج.م)) */}
@@ -1086,29 +1060,7 @@ export default function OperationsClient({
 
                   </div>
 
-              {/* Math Check Alert Banner */}
-              {showMathWarning && (
-                <div className="bg-rose-500/10 border border-rose-500/25 text-rose-400 p-4 rounded-xl text-xs font-semibold flex flex-col items-start gap-2.5 animate-slide-in select-none w-full">
-                  <div className="flex items-center gap-2 font-bold text-[13px]">
-                    <AlertTriangle size={16} className="shrink-0" />
-                    <span>تنبيه: البيانات الحسابية غير متطابقة!</span>
-                  </div>
-                  <ul className="list-disc list-inside space-y-1.5 pr-3 text-[11px] text-rose-300/90 leading-relaxed text-right">
-                    {!isMathMatching && (
-                      <li>إجمالي مصروفات المحفظة المدخل ({enteredTotal.toFixed(2)} ج.م) لا يتطابق مع مجموع البنود والتحويلات الفعلي ({calculatedSum.toFixed(2)} ج.م).</li>
-                    )}
-                    {walletsTotalCash > 0 && !isWalletsMatch && (
-                      <li>الكاش المتبقي (التوتال واليت) ({cashAfterExpenses.toFixed(2)} ج.م) لا يتطابق مع إجمالي كاش المحافظ المدخل ({walletsTotalCash.toLocaleString("en-US")} ج.م).</li>
-                    )}
-                  </ul>
-                </div>
-              )}
-              {showMathSuccess && (
-                <div className="bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 p-4 rounded-xl text-xs font-semibold flex items-center gap-3 animate-slide-in select-none">
-                  <CheckCircle2 size={16} className="shrink-0" />
-                  <span>الأرقام متطابقة بشكل صحيح (المجموع والمحفظة متطابقان: {cashAfterExpenses.toFixed(2)} ج.م).</span>
-                </div>
-              )}
+
 
               {/* Dynamic Custody Transfers Section */}
               <div className="border-t border-brand-border/20 pt-6 mt-8 space-y-4">
@@ -1347,11 +1299,20 @@ export default function OperationsClient({
 
             {/* Total Cash in Wallets Display */}
             <div className="border-t border-brand-border/25 pt-4 mt-6">
-              <div className="flex items-center justify-between bg-[#0b0e1a]/60 border border-brand-border/30 rounded-2xl p-4 text-right">
-                <span className="text-xs font-bold text-brand-dim/80 font-cairo">إجمالي كاش المحافظ:</span>
-                <span className="text-sm font-extrabold font-inter text-emerald-400">
-                  {walletsTotalCash.toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م
-                </span>
+              <div className="bg-[#0b0e1a]/60 border border-brand-border/30 rounded-2xl p-4 space-y-3.5 text-right">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-brand-dim/80 font-cairo">إجمالي كاش المحافظ:</span>
+                  <span className="text-sm font-extrabold font-inter text-emerald-400">
+                    {walletsTotalCash.toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م
+                  </span>
+                </div>
+                <div className="border-t border-brand-border/10 my-0.5"></div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-brand-dim/60 font-cairo">إجمالي كاش المحافظ بدون الكامبين:</span>
+                  <span className="text-xs font-bold font-inter text-white/80">
+                    {walletsTotalCashWithoutCampaign.toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م
+                  </span>
+                </div>
               </div>
             </div>
           </div>

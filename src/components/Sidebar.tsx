@@ -161,12 +161,6 @@ export default function Sidebar({
       allowedRoles: ["agent", "senioragent"],
     },
     {
-      name: "حسابات الـ CPL والكاش",
-      path: "/dashboard/cpl-calculator",
-      icon: Calculator,
-      allowedRoles: ["agent", "senioragent"],
-    },
-    {
       name: "طلبات الأموال",
       path: "/dashboard/admin/fund-requests",
       icon: Coins,
@@ -188,12 +182,6 @@ export default function Sidebar({
       name: "أرصدة العهد والمحافظ",
       path: "/dashboard/management/agents-custody",
       icon: Wallet,
-      allowedRoles: ["admin", "senioragent"],
-    },
-    {
-      name: "سجل CPL للإدارة",
-      path: "/dashboard/management/cpl-history",
-      icon: Calculator,
       allowedRoles: ["admin", "senioragent"],
     },
     {
