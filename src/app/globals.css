@@ -464,3 +464,93 @@ textarea[class*="bg-[#"],
   color: #ffffff !important;
 }
 
+/* ==========================================================================
+   PREMIUM DESIGN SYSTEM OVERRIDES: Global Inputs & Text Clarity
+   ========================================================================== */
+
+/* 1. Labels */
+label, 
+.form-label, 
+[class*="text-[13px]"].font-medium {
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+  transition: color 0.3s ease;
+}
+
+[data-mode="light"] label,
+[data-mode="light"] .form-label,
+[data-mode="light"] [class*="text-[13px]"].font-medium {
+  color: var(--text-main) !important;
+}
+
+/* 2. Inputs, Selects and Textareas (Editable) */
+input:not([type="checkbox"]):not([type="radio"]), 
+select, 
+textarea {
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  color: #ffffff !important;
+}
+
+/* Make numbers extra bold in inputs for clarity */
+input[type="number"] {
+  font-weight: 700 !important;
+}
+
+/* Placeholders contrast */
+::placeholder,
+input::placeholder,
+textarea::placeholder {
+  color: rgba(255, 255, 255, 0.35) !important;
+}
+
+[data-mode="light"] ::placeholder,
+[data-mode="light"] input::placeholder,
+[data-mode="light"] textarea::placeholder {
+  color: rgba(15, 23, 42, 0.45) !important;
+}
+
+/* 3. Read-only or Disabled fields (improve readability while keeping read-only state) */
+input[readonly], 
+input[disabled], 
+select[disabled], 
+textarea[disabled] {
+  color: rgba(255, 255, 255, 0.7) !important;
+  font-weight: 600 !important;
+  background-color: rgba(7, 8, 20, 0.4) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+[data-mode="light"] input[readonly], 
+[data-mode="light"] input[disabled], 
+[data-mode="light"] select[disabled], 
+[data-mode="light"] textarea[disabled] {
+  color: rgba(15, 23, 42, 0.6) !important;
+  background-color: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+/* 4. Table Elements text clarity */
+table th {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+[data-mode="light"] table th {
+  color: var(--text-main) !important;
+}
+
+table td {
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+}
+
+/* Numbers in table cells should be bold */
+table td .font-inter,
+table td .font-mono,
+table td[class*="font-bold"] {
+  font-weight: 700 !important;
+}
+

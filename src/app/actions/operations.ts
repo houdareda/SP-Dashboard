@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 export interface WalletWithBalance {
   id: string;
   phone_number: string;
+  esim_number?: string;
   is_active: boolean;
   start_of_month_balance: number;
   calculatedBalance: number;
@@ -733,6 +734,7 @@ export async function getAgentWalletsWithBalances() {
         return {
           id: w.id,
           phone_number: w.phone_number,
+          esim_number: w.esim_number,
           is_active: w.is_active,
           start_of_month_balance: starting,
           calculatedBalance,
@@ -744,6 +746,7 @@ export async function getAgentWalletsWithBalances() {
       walletCalculatedList = wallets.map((w) => ({
         id: w.id,
         phone_number: w.phone_number,
+        esim_number: w.esim_number,
         is_active: w.is_active,
         start_of_month_balance: Number(w.start_of_month_balance) || 0,
         calculatedBalance: Number(w.start_of_month_balance) || 0,
@@ -1000,5 +1003,60 @@ export async function getExpenseTransfers(expenseId: string) {
   } catch (err: any) {
     console.error("getExpenseTransfers error:", err);
     return { success: false, error: err.message, transfers: [] };
+  }
+}
+
+/**
+ * Server Action: Get the latest wallets balances snapshot for the current agent before a specific date
+ */
+export async function getLatestWalletsBalancesSnapshot(beforeDate?: string) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: "غير مصرح بالعملية. الرجاء تسجيل الدخول أولاً." };
+    }
+
+    let query = supabaseAdmin
+      .from("daily_expenses")
+      .select("wallets_balances, expense_date")
+      .eq("agent_id", user.id)
+      .order("expense_date", { ascending: false });
+
+    if (beforeDate) {
+      query = query.lt("expense_date", beforeDate);
+    }
+
+    const { data, error } = await query.limit(1).maybeSingle();
+
+    if (error) {
+      console.error("Error fetching latest wallets snapshot:", error);
+      return { success: false, error: error.message };
+    }
+
+    if (!data || !data.wallets_balances) {
+      // If no record found before the date, try to find the absolute latest one
+      const { data: latestData, error: latestError } = await supabaseAdmin
+        .from("daily_expenses")
+        .select("wallets_balances, expense_date")
+        .eq("agent_id", user.id)
+        .order("expense_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!latestError && latestData && latestData.wallets_balances) {
+        return { success: true, walletsBalances: latestData.wallets_balances, date: latestData.expense_date };
+      }
+
+      return { success: true, walletsBalances: null };
+    }
+
+    return { success: true, walletsBalances: data.wallets_balances, date: data.expense_date };
+  } catch (err: any) {
+    console.error("getLatestWalletsBalancesSnapshot unexpected error:", err);
+    return { success: false, error: err.message };
   }
 }

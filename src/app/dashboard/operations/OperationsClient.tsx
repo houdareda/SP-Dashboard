@@ -32,6 +32,7 @@ import {
   submitDailyExpenses,
   getExpenseReportForDate,
   submitEditExpenseRequest,
+  getLatestWalletsBalancesSnapshot,
 } from "@/app/actions/operations";
 
 interface OperationsClientProps {
@@ -210,25 +211,39 @@ export default function OperationsClient({
     }
   }, [currentCustody]);
 
+  // Fetch the closest previous day's recorded balances dynamically from the database (robust server backup)
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("sp_wallets_balances");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setWalletsBalances((prev) => {
-          const updated = { ...prev };
-          Object.keys(parsed).forEach((key) => {
-            if (updated[key] !== undefined) {
-              updated[key] = parsed[key];
-            }
+    if (!expenseDate) return;
+
+    const loadPreviousBalancesFromDB = async () => {
+      try {
+        const res = await getLatestWalletsBalancesSnapshot(expenseDate);
+        if (res.success && res.walletsBalances && Array.isArray(res.walletsBalances)) {
+          setWalletsBalances((prev) => {
+            const next = { ...prev };
+            res.walletsBalances.forEach((item: any) => {
+              if (item && item.wallet_id && item.wallet_id !== "campaign" && next[item.wallet_id] !== undefined) {
+                next[item.wallet_id] = String(item.balance ?? "");
+              }
+            });
+            return next;
           });
-          return updated;
-        });
+
+          // Pre-fill campaign balance as well
+          const campaignItem = res.walletsBalances.find((item: any) => item && item.wallet_id === "campaign");
+          if (campaignItem) {
+            setCampaignBalance(String(campaignItem.balance ?? ""));
+          } else {
+            setCampaignBalance("");
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching latest wallets balances from database:", err);
       }
-    } catch (err) {
-      console.error("Error loading wallets balances from localStorage:", err);
-    }
-  }, []);
+    };
+
+    loadPreviousBalancesFromDB();
+  }, [expenseDate]);
 
   const calculatedMarketing2 = React.useMemo(() => {
     const tCash = parseFloat(totalCash) || 0;
@@ -244,18 +259,10 @@ export default function OperationsClient({
   }, [totalCash, walletsTotalCash, marketing1, marketing3, personalExpense, transfers]);
 
   const handleWalletBalanceChange = (walletId: string, val: string) => {
-    setWalletsBalances((prev) => {
-      const next = {
-        ...prev,
-        [walletId]: val,
-      };
-      try {
-        localStorage.setItem("sp_wallets_balances", JSON.stringify(next));
-      } catch (err) {
-        console.error("Error saving wallets balances to localStorage:", err);
-      }
-      return next;
-    });
+    setWalletsBalances((prev) => ({
+      ...prev,
+      [walletId]: val,
+    }));
   };
 
   useEffect(() => {
@@ -583,7 +590,48 @@ export default function OperationsClient({
   };
 
   return (
-    <div className="space-y-8 font-cairo select-none relative text-right" dir="rtl">
+    <div className="space-y-8 font-cairo select-none relative text-right operations-container" dir="rtl">
+      <style dangerouslySetInnerHTML={{__html: `
+        /* Enlarge input and select text for higher visibility and clarity */
+        .operations-container input, 
+        .operations-container select {
+          font-size: 16px !important;
+          font-weight: 700 !important;
+          color: #ffffff !important;
+        }
+        /* Make inputs background slightly darker and borders clearer */
+        .operations-container input:not([readonly]):not([disabled]), 
+        .operations-container select:not([readonly]):not([disabled]) {
+          background-color: #05060f !important;
+          border-color: rgba(139, 92, 246, 0.4) !important;
+        }
+        /* Highlight focus state */
+        .operations-container input:focus, 
+        .operations-container select:focus {
+          border-color: #8b5cf6 !important;
+          box-shadow: 0 0 10px rgba(139, 92, 246, 0.2) !important;
+        }
+        /* Specific styling for placeholder text to make it clear but distinct */
+        .operations-container input::placeholder {
+          color: rgba(255, 255, 255, 0.35) !important;
+        }
+        /* Labels to be slightly larger, bold, and brighter */
+        .operations-container label {
+          font-size: 13.5px !important;
+          font-weight: 700 !important;
+          color: rgba(255, 255, 255, 0.95) !important;
+        }
+        /* Read-only or disabled inputs styling */
+        .operations-container input[readonly],
+        .operations-container input[disabled],
+        .operations-container select[disabled] {
+          color: rgba(255, 255, 255, 0.65) !important;
+          font-weight: 600 !important;
+          background-color: rgba(7, 8, 20, 0.4) !important;
+          border-color: rgba(255, 255, 255, 0.1) !important;
+        }
+      `}} />
+
       {/* Toast Notification */}
       {toast && (
         <div
@@ -754,7 +802,12 @@ export default function OperationsClient({
                                 }`}
                               >
                                 <div className="flex justify-between items-center font-inter">
-                                  <span className="font-bold text-sm tracking-wide">{wallet.phone_number}</span>
+                                  <div className="flex flex-col items-start gap-0.5 text-right">
+                                    <span className="font-extrabold text-sm tracking-wide">{wallet.phone_number}</span>
+                                    {wallet.esim_number && (
+                                      <span className="text-[10px] text-brand-accent font-semibold">eSIM: {wallet.esim_number}</span>
+                                    )}
+                                  </div>
                                   <div className="text-right space-y-0.5">
                                     <div className="text-xs text-brand-dim/80">
                                       الرصيد: {wallet.calculatedBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م
@@ -965,52 +1018,7 @@ export default function OperationsClient({
                       </div>
                     </div>
 
-                    {/* 3. Total Expenses & Transfers (إجمالي مصروفات المحفظة) */}
-                    <div className="space-y-2">
-                      <label htmlFor="totalAmount" className="block text-[13px] font-medium text-brand-dim font-semibold">
-                        إجمالي مصروفات المحفظة (ج.م)
-                      </label>
-                      <div className="relative">
-                        <input
-                          id="totalAmount"
-                          type="text"
-                          readOnly
-                          disabled={isPending}
-                          value={totalCash !== "" ? totalAmount.toFixed(2) : "0.00"}
-                          placeholder="0.00"
-                          className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
-                        />
-                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-brand-accent pointer-events-none">
-                          <ClipboardList size={16} />
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-brand-dim/60 block mt-1 select-none">
-                        * يتم احتسابه تلقائياً: مجموع المصاريف والتحويلات للزملاء.
-                      </span>
-                    </div>
-
-                    {/* 4. Total Cash after Expenses (توتال الكاش بعد خصم التحويلات والمصاريف الشخصية) */}
-                    <div className="space-y-2">
-                      <label htmlFor="cashAfterExpenses" className="block text-[13px] font-medium text-brand-dim font-cairo font-semibold">
-                        توتال الكاش بعد خصم التحويلات والمصاريف الشخصية (ج.م)
-                      </label>
-                      <div className="relative">
-                        <input
-                          id="cashAfterExpenses"
-                          type="text"
-                          readOnly
-                          disabled={isPending}
-                          value={totalCash !== "" ? cashAfterExpenses.toFixed(2) : "0.00"}
-                          placeholder="0.00"
-                          className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
-                        />
-                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
-                          <Coins size={16} />
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* 5. Personal Expenses (المصاريف الشخصية (ج.م)) */}
+                    {/* 3. Personal Expenses (المصاريف الشخصية (ج.م)) */}
                     <div className="space-y-2">
                       <label htmlFor="personalExpense" className="block text-[13px] font-medium text-brand-dim">
                         المصاريف الشخصية (ج.م)
@@ -1033,7 +1041,7 @@ export default function OperationsClient({
                       </div>
                     </div>
 
-                    {/* 6. Marketing 1 (مصاريف ماركتنج 1 (ج.م)) */}
+                    {/* 4. Marketing 1 (مصاريف ماركتنج 1 (ج.م)) */}
                     <div className="space-y-2">
                       <label htmlFor="marketing1" className="block text-[13px] font-medium text-brand-dim">
                         مصاريف ماركتنج 1 (ج.م)
@@ -1056,7 +1064,30 @@ export default function OperationsClient({
                       </div>
                     </div>
 
-                    {/* 7. Marketing 2 (مصاريف ماركتنج 2 (ج.م)) */}
+                    {/* 5. Marketing 3 (مصاريف ماركتنج 3 (ج.م)) */}
+                    <div className="space-y-2">
+                      <label htmlFor="marketing3" className="block text-[13px] font-medium text-brand-dim">
+                        مصاريف ماركتنج 3 (ج.م)
+                      </label>
+                      <div className="relative">
+                        <input
+                          id="marketing3"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          disabled={isPending}
+                          value={marketing3}
+                          onChange={(e) => setMarketing3(e.target.value)}
+                          placeholder="0.00"
+                          className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
+                        />
+                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
+                          <Coins size={16} />
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 6. Marketing 2 (مصاريف ماركتنج 2 (ج.م)) */}
                     <div className="space-y-2">
                       <label htmlFor="marketing2" className="block text-[13px] font-medium text-brand-dim font-semibold text-brand-accent">
                         مصاريف ماركتنج 2 (ج.م) *(تلقائي)
@@ -1080,24 +1111,46 @@ export default function OperationsClient({
                       </span>
                     </div>
 
-                    {/* 8. Marketing 3 (مصاريف ماركتنج 3 (ج.م)) */}
+                    {/* 7. Total Expenses & Transfers (إجمالي مصروفات المحفظة) */}
                     <div className="space-y-2">
-                      <label htmlFor="marketing3" className="block text-[13px] font-medium text-brand-dim">
-                        مصاريف ماركتنج 3 (ج.م)
+                      <label htmlFor="totalAmount" className="block text-[13px] font-medium text-brand-dim font-semibold">
+                        إجمالي مصروفات المحفظة (ج.م)
                       </label>
                       <div className="relative">
                         <input
-                          id="marketing3"
-                          type="number"
-                          step="0.01"
-                          min="0"
+                          id="totalAmount"
+                          type="text"
+                          readOnly
                           disabled={isPending}
-                          value={marketing3}
-                          onChange={(e) => setMarketing3(e.target.value)}
+                          value={totalCash !== "" ? totalAmount.toFixed(2) : "0.00"}
                           placeholder="0.00"
-                          className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
+                          className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
                         />
-                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
+                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-brand-accent pointer-events-none">
+                          <ClipboardList size={16} />
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-brand-dim/60 block mt-1 select-none">
+                        * يتم احتسابه تلقائياً: مجموع المصاريف والتحويلات للزملاء.
+                      </span>
+                    </div>
+
+                    {/* 8. Total Cash after Expenses (توتال الكاش بعد خصم التحويلات والمصاريف الشخصية) */}
+                    <div className="space-y-2">
+                      <label htmlFor="cashAfterExpenses" className="block text-[13px] font-medium text-brand-dim font-cairo font-semibold">
+                        توتال الكاش بعد خصم التحويلات والمصاريف الشخصية (ج.م)
+                      </label>
+                      <div className="relative">
+                        <input
+                          id="cashAfterExpenses"
+                          type="text"
+                          readOnly
+                          disabled={isPending}
+                          value={totalCash !== "" ? cashAfterExpenses.toFixed(2) : "0.00"}
+                          placeholder="0.00"
+                          className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
+                        />
+                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
                           <Coins size={16} />
                         </span>
                       </div>
@@ -1273,21 +1326,28 @@ export default function OperationsClient({
                       key={wallet.id}
                       className="px-4.5 py-2.5 rounded-xl bg-[#090b16]/90 border border-brand-border/30 hover:border-brand-accent/25 transition-all flex items-center justify-between gap-3 text-right"
                     >
-                      <div className="flex items-center gap-2.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigator.clipboard.writeText(wallet.phone_number);
-                            showToast("تم نسخ رقم المحفظة إلى الحافظة بنجاح.", "success");
-                          }}
-                          className="text-white/30 hover:text-white transition-colors cursor-pointer"
-                          title="نسخ رقم الهاتف"
-                        >
-                          <Copy size={12} />
-                        </button>
-                        <span className="text-xs font-bold text-white font-inter dir-ltr select-all">
-                          {wallet.phone_number}
-                        </span>
+                      <div className="flex flex-col items-start gap-0.5">
+                        <div className="flex items-center gap-2.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(wallet.phone_number);
+                              showToast("تم نسخ رقم المحفظة إلى الحافظة بنجاح.", "success");
+                            }}
+                            className="text-white/30 hover:text-white transition-colors cursor-pointer"
+                            title="نسخ رقم الهاتف"
+                          >
+                            <Copy size={12} />
+                          </button>
+                          <span className="text-[13.5px] font-extrabold text-white font-inter dir-ltr select-all">
+                            {wallet.phone_number}
+                          </span>
+                        </div>
+                        {wallet.esim_number && (
+                          <span className="text-[12px] font-extrabold text-brand-accent block text-right pr-6 select-all font-inter mt-0.5">
+                            eSIM: {wallet.esim_number}
+                          </span>
+                        )}
                       </div>
                       <div className="relative w-28">
                         <input
@@ -1384,33 +1444,35 @@ export default function OperationsClient({
                   </p>
                 </div>
 
-                {/* Date Search Input */}
-                <div className="max-w-md mx-auto md:mx-0 space-y-2 mb-8 text-right">
-                  <label htmlFor="editSearchDate" className="block text-sm font-bold text-white/90">
-                    تاريخ التقرير المطلوب تعديله
-                  </label>
-                  <div className="relative">
-                    <input
-                      id="editSearchDate"
-                      type="date"
-                      required
-                      disabled={isPending || isFetchingReport}
-                      min={tenDaysAgoStr}
-                      max={todayStr}
-                      value={editSearchDate}
-                      onChange={(e) => handleEditDateChange(e.target.value)}
-                      onClick={(e) => e.currentTarget.showPicker()}
-                      className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3 text-sm text-white focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter cursor-pointer"
-                    />
-                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
-                      {isFetchingReport ? (
-                        <Loader2 size={16} className="animate-spin text-brand-accent" />
-                      ) : (
-                        <Calendar size={16} />
-                      )}
-                    </span>
+                {/* Date Search Input - only visible when report is not loaded yet */}
+                {!originalReport && (
+                  <div className="w-full space-y-2 mb-8 text-right">
+                    <label htmlFor="editSearchDate" className="block text-sm font-bold text-white/90">
+                      تاريخ التقرير المطلوب تعديله
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="editSearchDate"
+                        type="date"
+                        required
+                        disabled={isPending || isFetchingReport}
+                        min={tenDaysAgoStr}
+                        max={todayStr}
+                        value={editSearchDate}
+                        onChange={(e) => handleEditDateChange(e.target.value)}
+                        onClick={(e) => e.currentTarget.showPicker()}
+                        className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3 text-sm text-white focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter cursor-pointer"
+                      />
+                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
+                        {isFetchingReport ? (
+                          <Loader2 size={16} className="animate-spin text-brand-accent" />
+                        ) : (
+                          <Calendar size={16} />
+                        )}
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Loading/Fetch State */}
                 {isFetchingReport && (
@@ -1425,20 +1487,30 @@ export default function OperationsClient({
                   <form onSubmit={handleEditRequestSubmit} className="space-y-6 animate-scale-in" autoComplete="off">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 text-right" dir="rtl">
                       
-                      {/* 1. Read-Only Original Date (تاريخ التقرير) */}
+                      {/* 1. Date Search Input (side-by-side with total cash inside form) */}
                       <div className="space-y-2 text-right">
-                        <label className="block text-[13px] font-medium text-brand-dim opacity-70">
-                          تاريخ التقرير
+                        <label htmlFor="editSearchDateForm" className="block text-[13px] font-medium text-brand-dim font-semibold">
+                          تاريخ التقرير المطلوب تعديله
                         </label>
                         <div className="relative">
                           <input
-                            type="text"
-                            readOnly
-                            value={originalReport.expenseDate}
-                            className="w-full bg-[#070814]/40 border border-brand-border/50 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 font-inter dir-ltr text-left select-none outline-none cursor-not-allowed"
+                            id="editSearchDateForm"
+                            type="date"
+                            required
+                            disabled={isPending || isFetchingReport}
+                            min={tenDaysAgoStr}
+                            max={todayStr}
+                            value={editSearchDate}
+                            onChange={(e) => handleEditDateChange(e.target.value)}
+                            onClick={(e) => e.currentTarget.showPicker()}
+                            className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter cursor-pointer"
                           />
-                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
-                            <Calendar size={16} />
+                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
+                            {isFetchingReport ? (
+                              <Loader2 size={16} className="animate-spin text-brand-accent" />
+                            ) : (
+                              <Calendar size={16} />
+                            )}
                           </span>
                         </div>
                       </div>
@@ -1477,49 +1549,7 @@ export default function OperationsClient({
                         )}
                       </div>
 
-                      {/* 3. Read-Only Total Cash after Expenses */}
-                      <div className="space-y-2 text-right">
-                        <label htmlFor="editCashAfterExpenses" className="block text-[13px] font-medium text-brand-dim font-cairo font-semibold">
-                          توتال الكاش بعد خصم التحويلات والمصاريف الشخصية المقترح (ج.م)
-                        </label>
-                        <div className="relative">
-                          <input
-                            id="editCashAfterExpenses"
-                            type="text"
-                            readOnly
-                            disabled={isPending}
-                            value={editTotalCash !== "" ? editCashAfterExpenses.toFixed(2) : "0.00"}
-                            placeholder="0.00"
-                            className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
-                          />
-                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
-                            <Coins size={16} />
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* 4. Read-Only computed editTotalAmount */}
-                      <div className="space-y-2 text-right">
-                        <label htmlFor="editTotalAmount" className="block text-[13px] font-medium text-brand-dim font-cairo font-semibold">
-                          إجمالي مصروفات المحفظة المقترح (ج.م) *تلقائي
-                        </label>
-                        <div className="relative">
-                          <input
-                            id="editTotalAmount"
-                            type="text"
-                            readOnly
-                            disabled={isPending}
-                            value={editTotalCash !== "" ? editTotalAmount.toFixed(2) : "0.00"}
-                            placeholder="0.00"
-                            className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
-                          />
-                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
-                            <ClipboardList size={16} />
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* 5. Personal Expenses */}
+                      {/* 3. Personal Expenses */}
                       <div className="space-y-2 text-right">
                         <label htmlFor="editPersonalExpense" className="block text-[13px] font-medium text-brand-dim">
                           المصاريف الشخصية المقترحة (ج.م)
@@ -1542,7 +1572,7 @@ export default function OperationsClient({
                         </div>
                       </div>
 
-                      {/* 6. Marketing 1 */}
+                      {/* 4. Marketing 1 */}
                       <div className="space-y-2 text-right">
                         <label htmlFor="editMarketing1" className="block text-[13px] font-medium text-brand-dim">
                           مصاريف ماركتنج 1 المقترحة (ج.م)
@@ -1565,7 +1595,7 @@ export default function OperationsClient({
                         </div>
                       </div>
 
-                      {/* 7. Marketing 3 */}
+                      {/* 5. Marketing 3 */}
                       <div className="space-y-2 text-right">
                         <label htmlFor="editMarketing3" className="block text-[13px] font-medium text-brand-dim">
                           مصاريف ماركتنج 3 المقترحة (ج.م)
@@ -1588,9 +1618,9 @@ export default function OperationsClient({
                         </div>
                       </div>
 
-                      {/* 8. Read-only dynamic Marketing 2 */}
+                      {/* 6. Read-only dynamic Marketing 2 */}
                       <div className="space-y-2 text-right">
-                        <label htmlFor="editMarketing2" className="block text-[13px] font-medium text-brand-dim font-cairo font-semibold">
+                        <label htmlFor="editMarketing2" className="block text-[13px] font-medium text-brand-dim font-cairo font-semibold text-brand-accent">
                           مصاريف ماركتنج 2 المقترحة (ج.م) *تلقائي
                         </label>
                         <div className="relative">
@@ -1600,6 +1630,48 @@ export default function OperationsClient({
                             readOnly
                             disabled={isPending}
                             value={editTotalCash !== "" ? computedEditMarketing2.toFixed(2) : "0.00"}
+                            placeholder="0.00"
+                            className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
+                          />
+                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
+                            <Coins size={16} />
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 7. Read-Only computed editTotalAmount */}
+                      <div className="space-y-2 text-right">
+                        <label htmlFor="editTotalAmount" className="block text-[13px] font-medium text-brand-dim font-cairo font-semibold">
+                          إجمالي مصروفات المحفظة المقترح (ج.م) *تلقائي
+                        </label>
+                        <div className="relative">
+                          <input
+                            id="editTotalAmount"
+                            type="text"
+                            readOnly
+                            disabled={isPending}
+                            value={editTotalCash !== "" ? editTotalAmount.toFixed(2) : "0.00"}
+                            placeholder="0.00"
+                            className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
+                          />
+                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
+                            <ClipboardList size={16} />
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 8. Read-Only Total Cash after Expenses */}
+                      <div className="space-y-2 text-right">
+                        <label htmlFor="editCashAfterExpenses" className="block text-[13px] font-medium text-brand-dim font-cairo font-semibold">
+                          توتال الكاش بعد خصم التحويلات والمصاريف الشخصية المقترح (ج.م)
+                        </label>
+                        <div className="relative">
+                          <input
+                            id="editCashAfterExpenses"
+                            type="text"
+                            readOnly
+                            disabled={isPending}
+                            value={editTotalCash !== "" ? editCashAfterExpenses.toFixed(2) : "0.00"}
                             placeholder="0.00"
                             className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
                           />
@@ -1763,21 +1835,28 @@ export default function OperationsClient({
                             key={wallet.id}
                             className="px-4.5 py-2.5 rounded-xl bg-[#090b16]/90 border border-brand-border/30 hover:border-brand-accent/25 transition-all flex items-center justify-between gap-3 text-right"
                           >
-                            <div className="flex items-center gap-2.5">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(wallet.phone_number);
-                                  showToast("تم نسخ رقم المحفظة إلى الحافظة بنجاح.", "success");
-                                }}
-                                className="text-white/30 hover:text-white transition-colors cursor-pointer"
-                                title="نسخ رقم الهاتف"
-                              >
-                                <Copy size={12} />
-                              </button>
-                              <span className="text-xs font-bold text-white font-inter dir-ltr select-all">
-                                {wallet.phone_number}
-                              </span>
+                            <div className="flex flex-col items-start gap-0.5">
+                              <div className="flex items-center gap-2.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(wallet.phone_number);
+                                    showToast("تم نسخ رقم المحفظة إلى الحافظة بنجاح.", "success");
+                                  }}
+                                  className="text-white/30 hover:text-white transition-colors cursor-pointer"
+                                  title="نسخ رقم الهاتف"
+                                >
+                                  <Copy size={12} />
+                                </button>
+                                <span className="text-[13.5px] font-extrabold text-white font-inter dir-ltr select-all">
+                                  {wallet.phone_number}
+                                </span>
+                              </div>
+                              {wallet.esim_number && (
+                                <span className="text-[12px] font-extrabold text-brand-accent block text-right pr-6 select-all font-inter mt-0.5">
+                                  eSIM: {wallet.esim_number}
+                                </span>
+                              )}
                             </div>
                             <div className="relative w-28">
                               <input

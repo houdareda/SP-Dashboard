@@ -2,7 +2,7 @@
 
 import React, { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { addWallet, toggleWalletStatus, WalletData } from "@/app/actions/wallet";
+import { addWallet, toggleWalletStatus, editWallet, WalletData } from "@/app/actions/wallet";
 import { supabase } from "@/lib/supabase";
 import { MONTHLY_WALLET_LIMIT } from "@/lib/constants";
 import {
@@ -19,6 +19,7 @@ import {
   ChevronDown,
   AlertCircle,
   BarChart3,
+  X,
 } from "lucide-react";
 
 interface WalletsClientProps {
@@ -43,6 +44,13 @@ export default function WalletsClient({ initialWallets }: WalletsClientProps) {
   // Form input states
   const [phone, setPhone] = useState("");
   const [balance, setBalance] = useState("");
+  const [esimNumber, setEsimNumber] = useState("");
+
+  // Edit modal states
+  const [editingWallet, setEditingWallet] = useState<WalletData | null>(null);
+  const [editPhone, setEditPhone] = useState("");
+  const [editBalance, setEditBalance] = useState("");
+  const [editEsim, setEditEsim] = useState("");
 
   // Sync state with initialWallets on page refreshes
   React.useEffect(() => {
@@ -154,17 +162,70 @@ export default function WalletsClient({ initialWallets }: WalletsClientProps) {
     }
 
     startTransition(async () => {
-      const res = await addWallet(phone.trim(), initialBalanceVal);
+      const res = await addWallet(phone.trim(), initialBalanceVal, esimNumber.trim() || undefined);
 
       if (res.success && res.wallet) {
         showToast("تم إضافة المحفظة بنجاح.", "success");
         setPhone("");
         setBalance("");
+        setEsimNumber("");
         // Optimistically add to list
         setWallets((prev) => [res.wallet!, ...prev]);
         router.refresh();
       } else {
         showToast(res.error || "فشل إضافة المحفظة.", "error");
+      }
+    });
+  };
+
+  // Handle opening Edit Modal
+  const openEditModal = (wallet: WalletData) => {
+    setEditingWallet(wallet);
+    setEditPhone(wallet.phone_number);
+    setEditBalance(String(wallet.start_of_month_balance));
+    setEditEsim(wallet.esim_number || "");
+  };
+
+  // Handle Edit Wallet Submit
+  const handleEditWalletSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingWallet) return;
+
+    if (!editPhone || editPhone.trim() === "") {
+      showToast("يرجى إدخال رقم الهاتف للمحفظة.", "error");
+      return;
+    }
+
+    const phoneRegex = /^01[0125][0-9]{8}$/;
+    if (!phoneRegex.test(editPhone.trim())) {
+      showToast("يرجى إدخال رقم هاتف مصري صحيح (11 رقم)", "error");
+      return;
+    }
+
+    const balanceVal = parseFloat(editBalance);
+    if (isNaN(balanceVal) || balanceVal < 0) {
+      showToast("يرجى إدخال رصيد أول الشهر صحيح.", "error");
+      return;
+    }
+
+    startTransition(async () => {
+      const res = await editWallet(
+        editingWallet.id,
+        editPhone.trim(),
+        balanceVal,
+        editEsim.trim() || undefined
+      );
+
+      if (res.success && res.wallet) {
+        showToast("تم تعديل المحفظة بنجاح.", "success");
+        setEditingWallet(null);
+        // Update local state list
+        setWallets((prev) =>
+          prev.map((w) => (w.id === editingWallet.id ? res.wallet! : w))
+        );
+        router.refresh();
+      } else {
+        showToast(res.error || "فشل تعديل المحفظة.", "error");
       }
     });
   };
@@ -271,9 +332,16 @@ export default function WalletsClient({ initialWallets }: WalletsClientProps) {
               <Smartphone size={18} />
             </div>
             <div className="space-y-0.5">
-              <div className="flex items-center gap-1 text-xs font-semibold text-brand-dim">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-brand-dim">
                 <span>رقم المحفظة</span>
-                <Pencil size={10} className="text-white/20" />
+                <button
+                  type="button"
+                  onClick={() => openEditModal(wallet)}
+                  className="p-1 hover:bg-white/5 rounded text-brand-accent transition-colors cursor-pointer select-none"
+                  title="تعديل المحفظة"
+                >
+                  <Pencil size={11} />
+                </button>
                 {/* Exceeded Badge */}
                 {isExceeded && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-500/15 border border-red-500/30 text-red-400 rounded-full text-[9px] font-bold mr-1">
@@ -285,6 +353,17 @@ export default function WalletsClient({ initialWallets }: WalletsClientProps) {
               <span className="text-[17px] font-bold text-white tracking-wide block font-inter dir-ltr text-right">
                 {wallet.phone_number}
               </span>
+              {wallet.esim_number && (
+                <div className="text-right mt-1.5">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-brand-accent/10 border border-brand-accent/30 text-brand-accent rounded-xl text-xs font-bold select-all">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-accent opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-brand-accent"></span>
+                    </span>
+                    <span>eSIM: {wallet.esim_number}</span>
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -562,6 +641,28 @@ export default function WalletsClient({ initialWallets }: WalletsClientProps) {
                 </div>
               </div>
 
+              {/* eSIM Number Input */}
+              <div className="space-y-2">
+                <label htmlFor="esimNumber" className="block text-sm font-bold text-white/90 mb-1">
+                  رقم الشريحة الإلكترونية (eSIM)
+                </label>
+                <div className="relative">
+                  <input
+                    id="esimNumber"
+                    type="text"
+                    disabled={isPending}
+                    value={esimNumber}
+                    onChange={(e) => setEsimNumber(e.target.value)}
+                    placeholder="آخر 4 أرقام من الشريحة (اختياري)"
+                    autoComplete="off"
+                    className="w-full bg-[#070814] border border-brand-border rounded-xl pl-4 pr-11 py-3 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-right"
+                  />
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30">
+                    <Smartphone size={16} />
+                  </span>
+                </div>
+              </div>
+
               {/* Submit Button */}
               <button
                 type="submit"
@@ -652,7 +753,129 @@ export default function WalletsClient({ initialWallets }: WalletsClientProps) {
         </div>
 
       </div>
+
+      {/* Edit Wallet Modal */}
+      {editingWallet && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-[#020208]/80 backdrop-blur-md transition-opacity"
+            onClick={() => setEditingWallet(null)}
+          />
+
+          {/* Modal Container */}
+          <div className="relative w-full max-w-md bg-[#090c1e] border border-brand-border/60 rounded-[24px] shadow-2xl p-6 md:p-8 text-right font-cairo animate-scale-in text-white" dir="rtl">
+            {/* Close Button */}
+            <button
+              onClick={() => setEditingWallet(null)}
+              className="absolute top-5 left-5 text-white/40 hover:text-white transition-colors cursor-pointer w-8 h-8 rounded-full bg-white/[0.03] border border-white/10 flex items-center justify-center"
+            >
+              <X size={16} />
+            </button>
+
+            {/* Header */}
+            <div className="border-b border-brand-border/20 pb-4 mb-6">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Pencil size={18} className="text-brand-accent" />
+                <span>تعديل بيانات المحفظة</span>
+              </h3>
+              <p className="text-xs text-brand-dim mt-1">تحديث رقم الهاتف، رصيد أول الشهر، ورقم الشريحة الإلكترونية.</p>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleEditWalletSubmit} className="space-y-4">
+              {/* Phone Input */}
+              <div className="space-y-1.5">
+                <label htmlFor="editPhone" className="block text-xs font-semibold text-brand-dim">
+                  رقم الهاتف للمحفظة
+                </label>
+                <div className="relative">
+                  <input
+                    id="editPhone"
+                    type="text"
+                    required
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    placeholder="01xxxxxxxxx"
+                    className="w-full bg-[#070814] border border-brand-border rounded-xl pl-4 pr-11 py-3 text-sm text-white focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow text-left dir-ltr font-inter"
+                  />
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30">
+                    <Phone size={16} />
+                  </span>
+                </div>
+              </div>
+
+              {/* Start of Month Balance Input */}
+              <div className="space-y-1.5">
+                <label htmlFor="editBalance" className="block text-xs font-semibold text-brand-dim">
+                  رصيد أول الشهر للمحفظة (ج.م)
+                </label>
+                <div className="relative">
+                  <input
+                    id="editBalance"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={editBalance}
+                    onChange={(e) => setEditBalance(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full bg-[#070814] border border-brand-border rounded-xl pl-4 pr-11 py-3 text-sm text-white focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow text-left dir-ltr font-inter"
+                  />
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30">
+                    <Coins size={16} />
+                  </span>
+                </div>
+              </div>
+
+              {/* eSIM Number Input */}
+              <div className="space-y-1.5">
+                <label htmlFor="editEsim" className="block text-xs font-semibold text-brand-dim">
+                  رقم الشريحة الإلكترونية (eSIM)
+                </label>
+                <div className="relative">
+                  <input
+                    id="editEsim"
+                    type="text"
+                    value={editEsim}
+                    onChange={(e) => setEditEsim(e.target.value)}
+                    placeholder="آخر 4 أرقام من الشريحة (اختياري)"
+                    className="w-full bg-[#070814] border border-brand-border rounded-xl pl-4 pr-11 py-3 text-sm text-white focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow text-right"
+                  />
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30">
+                    <Smartphone size={16} />
+                  </span>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-4 border-t border-brand-border/10 mt-6">
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="flex-1 py-3 bg-brand-accent hover:bg-brand-accent/95 disabled:bg-brand-accent/50 text-white font-semibold rounded-xl transition-all duration-300 shadow-[0_0_15px_rgba(139,92,246,0.25)] active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {isPending ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>جاري التعديل...</span>
+                    </>
+                  ) : (
+                    <span>حفظ التعديلات</span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingWallet(null)}
+                  className="px-5 py-3 bg-brand-border/30 hover:bg-brand-border/50 text-white font-semibold rounded-xl transition-all duration-300"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-

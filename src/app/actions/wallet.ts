@@ -9,6 +9,7 @@ export interface WalletData {
   id: string;
   agent_id: string;
   phone_number: string;
+  esim_number?: string;
   is_active: boolean;
   start_of_month_balance: number;
   last_verified_at: string | null;
@@ -116,7 +117,7 @@ export async function getWallets() {
 /**
  * Server Action: Add a new wallet
  */
-export async function addWallet(phoneNumber: string, initialBalance: number) {
+export async function addWallet(phoneNumber: string, initialBalance: number, esimNumber?: string) {
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -138,6 +139,7 @@ export async function addWallet(phoneNumber: string, initialBalance: number) {
         agent_id: user.id,
         phone_number: phoneNumber.trim(),
         start_of_month_balance: initialBalance,
+        esim_number: esimNumber ? esimNumber.trim() : null,
         is_active: true,
       })
       .select("*, agent_profile:agent_id(full_name)")
@@ -168,6 +170,68 @@ export async function addWallet(phoneNumber: string, initialBalance: number) {
     };
   } catch (err: any) {
     console.error("addWallet error:", err);
+    return { success: false, error: err.message || "حدث خطأ غير متوقع." };
+  }
+}
+
+/**
+ * Server Action: Edit an existing wallet's details (phone number, start of month balance, esim number)
+ */
+export async function editWallet(
+  walletId: string,
+  phoneNumber: string,
+  startOfMonthBalance: number,
+  esimNumber?: string
+) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "غير مصرح بالعملية. الرجاء تسجيل الدخول أولاً." };
+    }
+
+    if (!phoneNumber || phoneNumber.trim() === "") {
+      return { success: false, error: "رقم الهاتف مطلوب." };
+    }
+    if (startOfMonthBalance === undefined || startOfMonthBalance === null || isNaN(startOfMonthBalance)) {
+      return { success: false, error: "رصيد أول الشهر غير صحيح." };
+    }
+
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("wallets")
+      .update({
+        phone_number: phoneNumber.trim(),
+        start_of_month_balance: startOfMonthBalance,
+        esim_number: esimNumber ? esimNumber.trim() : null,
+      })
+      .eq("id", walletId)
+      .select("*, agent_profile:agent_id(full_name)")
+      .single();
+
+    if (error) {
+      if (
+        error.code === "23505" ||
+        error.message?.toLowerCase().includes("unique") ||
+        error.message?.toLowerCase().includes("already exists")
+      ) {
+        return { success: false, error: "هذا الرقم مسجل مسبقاً" };
+      }
+      return { success: false, error: `فشل تعديل المحفظة: ${error.message}` };
+    }
+
+    const walletData = data as WalletData;
+    const startBal = Number(walletData.start_of_month_balance) || 0;
+    
+    return {
+      success: true,
+      wallet: {
+        ...walletData,
+        currentMonthTotal: startBal,
+        remainingLimit: Math.max(0, MONTHLY_WALLET_LIMIT - startBal),
+      } as WalletData,
+    };
+  } catch (err: any) {
+    console.error("editWallet error:", err);
     return { success: false, error: err.message || "حدث خطأ غير متوقع." };
   }
 }

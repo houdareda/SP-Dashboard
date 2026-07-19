@@ -26,7 +26,7 @@ export default async function DashboardOverviewPage({
   // 1. Fetch user role to determine data visibility
   const { data: userProfile, error: profileError } = await supabase
     .from("profiles")
-    .select("role, full_name")
+    .select("role, full_name, is_active")
     .eq("id", user.id)
     .single();
 
@@ -36,7 +36,7 @@ export default async function DashboardOverviewPage({
     // Fallback using admin client if standard fetch fails due to RLS delays
     const { data: adminProfile } = await supabaseAdmin
       .from("profiles")
-      .select("role, full_name")
+      .select("role, full_name, is_active")
       .eq("id", user.id)
       .single();
     if (adminProfile) {
@@ -46,6 +46,10 @@ export default async function DashboardOverviewPage({
 
   if (!profile) {
     redirect("/login?error=profile_not_found");
+  }
+
+  if (profile.is_active === false) {
+    redirect("/login?error=deactivated");
   }
 
   if (profile.role === "accountant") {

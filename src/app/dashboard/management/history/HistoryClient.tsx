@@ -734,10 +734,18 @@ export default function HistoryClient({
       {/* Tab Panels */}
       <div className="bg-[#0a0d16]/60 border border-brand-border/40 backdrop-blur-xl rounded-3xl p-6 shadow-xl animate-fade-in min-h-[350px] relative">
         {isLoading && (
-          <div className="absolute inset-0 bg-[#0a0d16]/60 backdrop-blur-[2px] flex items-center justify-center rounded-3xl z-50 transition-all duration-300">
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-10 h-10 border-4 border-brand-accent/20 border-t-brand-accent rounded-full animate-spin"></div>
-              <span className="text-xs text-brand-dim/80 font-medium font-cairo">جاري تحميل البيانات...</span>
+          <div className="absolute inset-0 bg-[#0a0d16]/80 backdrop-blur-md flex items-center justify-center rounded-3xl z-50 transition-all duration-300">
+            <div className="flex flex-col items-center gap-4 text-center">
+              <div className="relative w-16 h-16 flex items-center justify-center">
+                <div className="absolute inset-0 rounded-full border-2 border-brand-accent/10 border-t-brand-accent border-r-brand-accent/50 animate-spin" style={{ animationDuration: "1s" }} />
+                <div className="w-8 h-8 rounded-lg bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center shadow-[0_0_20px_rgba(139,92,246,0.25)] animate-pulse">
+                  <span className="text-white text-[10px] font-bold font-inter select-none">SP</span>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <span className="block text-xs font-bold text-white font-cairo">جاري تحديث البيانات...</span>
+                <span className="block text-[10px] text-brand-dim animate-pulse font-cairo">يتم الآن مزامنة تفاصيل المصاريف والتحويلات</span>
+              </div>
             </div>
           </div>
         )}
@@ -1020,22 +1028,6 @@ export default function HistoryClient({
                     </div>
                   </div>
 
-                  {/* Cash After Expenses */}
-                  <div className="space-y-1.5">
-                    <span className="block text-[11px] font-semibold text-brand-dim">توتال الكاش بعد خصم التحويلات والمصاريف الشخصية</span>
-                    <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr font-bold text-brand-accent">
-                      {Number(selectedExpense.cash_after_expenses || 0).toLocaleString("en-US")} ج.م
-                    </div>
-                  </div>
-
-                  {/* Total Expenses */}
-                  <div className="space-y-1.5">
-                    <span className="block text-[11px] font-semibold text-brand-dim">إجمالي مصروفات المحفظة (التوتال)</span>
-                    <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
-                      {Number(selectedExpense.total_amount || 0).toLocaleString("en-US")} ج.م
-                    </div>
-                  </div>
-
                   {/* Personal Expense */}
                   <div className="space-y-1.5">
                     <span className="block text-[11px] font-semibold text-brand-dim">المصاريف الشخصية</span>
@@ -1065,6 +1057,22 @@ export default function HistoryClient({
                     <span className="block text-[11px] font-semibold text-brand-dim">مصاريف ماركتنج 2 (تلقائي)</span>
                     <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
                       {Number(selectedExpense.marketing_2 || 0).toLocaleString("en-US")} ج.م
+                    </div>
+                  </div>
+
+                  {/* Total Expenses */}
+                  <div className="space-y-1.5">
+                    <span className="block text-[11px] font-semibold text-brand-dim">إجمالي مصروفات المحفظة (التوتال)</span>
+                    <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
+                      {Number(selectedExpense.total_amount || 0).toLocaleString("en-US")} ج.م
+                    </div>
+                  </div>
+
+                  {/* Cash After Expenses */}
+                  <div className="space-y-1.5">
+                    <span className="block text-[11px] font-semibold text-brand-dim">توتال الكاش بعد خصم التحويلات والمصاريف الشخصية</span>
+                    <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr font-bold text-brand-accent">
+                      {Number(selectedExpense.cash_after_expenses || 0).toLocaleString("en-US")} ج.م
                     </div>
                   </div>
 

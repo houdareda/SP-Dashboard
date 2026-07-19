@@ -18,6 +18,21 @@ export default function LoginPage() {
     // Check if user already has an active session
     const checkSession = async () => {
       try {
+        const params = new URLSearchParams(window.location.search);
+        const errorParam = params.get("error");
+
+        if (errorParam === "profile_not_found" || errorParam === "deactivated") {
+          // Clear session immediately to break infinite redirect loop
+          await supabase.auth.signOut();
+          setIsRedirecting(false);
+          if (errorParam === "profile_not_found") {
+            setErrorMsg("عذراً، لم يتم العثور على ملف تعريف لحسابك. يرجى مراجعة المسؤول.");
+          } else if (errorParam === "deactivated") {
+            setErrorMsg("تم إيقاف حسابك من قبل الإدارة. يرجى مراجعة المسؤول.");
+          }
+          return;
+        }
+
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           setIsRedirecting(true);
@@ -30,8 +45,12 @@ export default function LoginPage() {
     checkSession();
 
     // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      const params = new URLSearchParams(window.location.search);
+      const errorParam = params.get("error");
+      
+      // Only auto-redirect if there's no auth error parameter present
+      if (session && errorParam !== "profile_not_found" && errorParam !== "deactivated") {
         setIsRedirecting(true);
         router.push("/dashboard");
       }
@@ -41,15 +60,6 @@ export default function LoginPage() {
       subscription.unsubscribe();
     };
   }, [router]);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("error") === "deactivated") {
-        setErrorMsg("تم إيقاف حسابك من قبل الإدارة. يرجى مراجعة المسؤول.");
-      }
-    }
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

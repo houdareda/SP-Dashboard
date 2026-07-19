@@ -19,10 +19,10 @@ export default async function DashboardLayout({
   }
 
   // Fetch logged in user profile details with supabaseAdmin as a fallback to avoid RLS block
-  let profile = null;
+  let profile: any = null;
   const { data: userProfile, error: profileError } = await supabase
     .from("profiles")
-    .select("full_name, role, sys1_url, sys2_url, sys3_url, sys4_url")
+    .select("full_name, role, is_active, sys1_url, sys2_url, sys3_url, sys4_url")
     .eq("id", user.id)
     .single();
 
@@ -30,7 +30,7 @@ export default async function DashboardLayout({
     console.warn("User client failed to fetch profile, trying admin client fallback:", profileError?.message);
     const { data: adminProfile } = await supabaseAdmin
       .from("profiles")
-      .select("full_name, role, sys1_url, sys2_url, sys3_url, sys4_url")
+      .select("full_name, role, is_active, sys1_url, sys2_url, sys3_url, sys4_url")
       .eq("id", user.id)
       .single();
     if (adminProfile) {
@@ -40,16 +40,24 @@ export default async function DashboardLayout({
     profile = userProfile;
   }
 
+  if (!profile) {
+    redirect("/login?error=profile_not_found");
+  }
+
+  if (profile.is_active === false) {
+    redirect("/login?error=deactivated");
+  }
+
   return (
     <DashboardShell
       userId={user.id}
       userEmail={user.email || undefined}
-      fullName={profile?.full_name || undefined}
-      role={profile?.role || undefined}
-      sys1Url={profile?.sys1_url || undefined}
-      sys2Url={profile?.sys2_url || undefined}
-      sys3Url={profile?.sys3_url || undefined}
-      sys4Url={profile?.sys4_url || undefined}
+      fullName={profile.full_name || undefined}
+      role={profile.role || undefined}
+      sys1Url={profile.sys1_url || undefined}
+      sys2Url={profile.sys2_url || undefined}
+      sys3Url={profile.sys3_url || undefined}
+      sys4Url={profile.sys4_url || undefined}
     >
       {children}
     </DashboardShell>
