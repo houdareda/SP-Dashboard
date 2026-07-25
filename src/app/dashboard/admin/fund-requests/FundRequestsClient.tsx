@@ -58,6 +58,7 @@ export default function FundRequestsClient({
   // Modals state
   const [activeModalRequest, setActiveModalRequest] = useState<AdminFundRequest | null>(null);
   const [approvedAmount, setApprovedAmount] = useState<string>("");
+  const [multiApprovedAmounts, setMultiApprovedAmounts] = useState<Record<string, string>>({});
   const [activeRejectRequest, setActiveRejectRequest] = useState<AdminFundRequest | null>(null);
 
   const toggleExpand = (id: string) => {
@@ -156,31 +157,84 @@ export default function FundRequestsClient({
   // 2. Action Handlers
   const handleOpenApproveModal = (req: AdminFundRequest) => {
     setActiveModalRequest(req);
-    // Cap the initial approved amount to the wallet's remaining limit
-    const remainingLimit = req.wallet_remaining_limit ?? 200000;
-    const cappedAmount = Math.min(req.amount_requested, remainingLimit);
-    setApprovedAmount(String(cappedAmount > 0 ? cappedAmount : req.amount_requested));
+    if (req.is_multi_wallet) {
+      setApprovedAmount(String(req.amount_requested));
+      const initialAmounts: Record<string, string> = {};
+      if (Array.isArray(req.multi_wallet_data)) {
+        req.multi_wallet_data.forEach((item: any) => {
+          initialAmounts[item.wallet_id] = String(item.amount_requested || item.amount);
+        });
+      }
+      setMultiApprovedAmounts(initialAmounts);
+    } else {
+      // Cap the initial approved amount to the wallet's remaining limit
+      const remainingLimit = req.wallet_remaining_limit ?? 200000;
+      const cappedAmount = Math.min(req.amount_requested, remainingLimit);
+      setApprovedAmount(String(cappedAmount > 0 ? cappedAmount : req.amount_requested));
+    }
   };
 
   const handleConfirmApproval = () => {
     if (!activeModalRequest) return;
-    const amountVal = parseFloat(approvedAmount);
-    if (isNaN(amountVal) || amountVal <= 0) {
-      showToast("يرجى إدخال مبلغ صحيح أكبر من الصفر للاعتماد.", "error");
-      return;
-    }
 
-    startTransition(async () => {
-      const res = await reviewFundRequest(activeModalRequest.id, "approved", amountVal);
-      if (res.success) {
-        showToast("تم اعتماد طلب شحن الرصيد بنجاح.", "success");
-        setRequests((prev) => prev.filter((r) => r.id !== activeModalRequest.id));
-        setActiveModalRequest(null);
-        router.refresh();
-      } else {
-        showToast(res.error || "فشل اعتماد الطلب.", "error");
+    if (activeModalRequest.is_multi_wallet) {
+      if (!activeModalRequest.multi_wallet_data || !Array.isArray(activeModalRequest.multi_wallet_data)) {
+        showToast("بيانات الطلب المتعدد غير صالحة.", "error");
+        return;
       }
-    });
+
+      const breakdown: Array<{ walletId: string; amountApproved: number }> = [];
+      let totalApproved = 0;
+
+      for (const item of activeModalRequest.multi_wallet_data) {
+        const valStr = multiApprovedAmounts[item.wallet_id];
+        const val = parseFloat(valStr || "0");
+        if (isNaN(val) || val < 0) {
+          showToast(`يرجى إدخال مبلغ صحيح أكبر من أو يساوي الصفر للمحفظة ${item.phone_number}.`, "error");
+          return;
+        }
+        totalApproved += val;
+        breakdown.push({
+          walletId: item.wallet_id,
+          amountApproved: val,
+        });
+      }
+
+      if (totalApproved <= 0) {
+        showToast("يجب أن يكون إجمالي المبالغ المعتمدة أكبر من الصفر.", "error");
+        return;
+      }
+
+      startTransition(async () => {
+        const res = await reviewFundRequest(activeModalRequest.id, "approved", totalApproved, breakdown);
+        if (res.success) {
+          showToast("تم اعتماد طلب شحن الرصيد بنجاح.", "success");
+          setRequests((prev) => prev.filter((r) => r.id !== activeModalRequest.id));
+          setActiveModalRequest(null);
+          router.refresh();
+        } else {
+          showToast(res.error || "فشل اعتماد الطلب.", "error");
+        }
+      });
+    } else {
+      const amountVal = parseFloat(approvedAmount);
+      if (isNaN(amountVal) || amountVal <= 0) {
+        showToast("يرجى إدخال مبلغ صحيح أكبر من الصفر للاعتماد.", "error");
+        return;
+      }
+
+      startTransition(async () => {
+        const res = await reviewFundRequest(activeModalRequest.id, "approved", amountVal);
+        if (res.success) {
+          showToast("تم اعتماد طلب شحن الرصيد بنجاح.", "success");
+          setRequests((prev) => prev.filter((r) => r.id !== activeModalRequest.id));
+          setActiveModalRequest(null);
+          router.refresh();
+        } else {
+          showToast(res.error || "فشل اعتماد الطلب.", "error");
+        }
+      });
+    }
   };
 
   const handleReject = (req: AdminFundRequest) => {
@@ -497,19 +551,49 @@ export default function FundRequestsClient({
 
                     {/* Target Wallet and Smart Balance */}
                     <td className="py-4.5 px-6 space-y-1 text-right">
-                      <div className="font-bold text-white font-inter tracking-wide">
-                        {req.wallet?.phone_number || "محفظة غير معروفة"}
-                      </div>
-                      <div className="text-[10.5px] text-brand-dim font-cairo">
-                        الرصيد: {req.wallet_balance.toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م
-                      </div>
+                      {req.is_multi_wallet ? (
+                        <div className="space-y-1">
+                          <span className="inline-block px-1.5 py-0.5 text-[9.5px] font-extrabold bg-brand-accent/20 text-brand-accent border border-brand-accent/30 rounded-md mb-0.5 select-none animate-pulse font-cairo">
+                            طلب متعدد المحافظ
+                          </span>
+                          <div className="text-xs text-white/95 space-y-0.5 font-inter font-semibold select-all">
+                            {Array.isArray(req.multi_wallet_data) ? (
+                              req.multi_wallet_data.map((item: any, idx: number) => (
+                                <div key={idx}>
+                                  {item.phone_number} {item.esim_number ? `(${item.esim_number})` : ""}
+                                </div>
+                              ))
+                            ) : (
+                              <div>{req.wallet?.phone_number || "محفظة غير معروفة"}</div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="font-bold text-white font-inter tracking-wide">
+                            {req.wallet?.phone_number || "محفظة غير معروفة"}
+                          </div>
+                          <div className="text-[10.5px] text-brand-dim font-cairo">
+                            الرصيد: {req.wallet_balance.toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م
+                          </div>
+                        </>
+                      )}
                     </td>
 
                     {/* Requested amount */}
-                    <td className="py-4.5 px-6">
-                      <span className="font-bold text-brand-accent font-inter text-base tracking-wide">
+                    <td className="py-4.5 px-6 space-y-0.5">
+                      <span className="font-bold text-brand-accent font-inter text-base tracking-wide block">
                         {req.amount_requested.toLocaleString("en-US")} ج.م
                       </span>
+                      {req.is_multi_wallet && Array.isArray(req.multi_wallet_data) && (
+                        <div className="text-[10px] text-brand-dim/80 space-y-0.5">
+                          {req.multi_wallet_data.map((item: any, idx: number) => (
+                            <div key={idx} className="dir-ltr text-right font-inter">
+                              {Number(item.amount_requested || item.amount).toLocaleString("en-US")} ج.م
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </td>
 
                     {/* Status Badge */}
@@ -629,8 +713,8 @@ export default function FundRequestsClient({
                 ج.م. يمكنك تعديل المبلغ المعتمد أدناه إذا كنت تريد الموافقة الجزئية.
               </p>
 
-              {/* Remaining Limit Info */}
-              {(() => {
+              {/* Remaining Limit Info for Single Wallet Requests */}
+              {!activeModalRequest.is_multi_wallet && (() => {
                 const remainingLimit = activeModalRequest.wallet_remaining_limit ?? 200000;
                 const isExceeding = activeModalRequest.amount_requested > remainingLimit;
                 return (
@@ -641,41 +725,102 @@ export default function FundRequestsClient({
                   }`}>
                     <Wallet size={14} className="mt-0.5 shrink-0" />
                     <div className="space-y-0.5">
-                      <p className="font-bold">
+                      <p className="font-bold font-cairo">
                         الحد المتبقي للمحفظة هذا الشهر:
                         <span className="font-inter mr-1.5">{remainingLimit.toLocaleString("en-US")} ج.م</span>
                       </p>
                       {isExceeding && (
-                        <p>المبلغ المطلوب يتجاوز الحد المتبقي. تم تعديل المبلغ المعتمد تلقائياً.</p>
+                        <p className="font-cairo">المبلغ المطلوب يتجاوز الحد المتبقي. تم تعديل المبلغ المعتمد تلقائياً.</p>
                       )}
                     </div>
                   </div>
                 );
               })()}
 
-              <div className="space-y-2">
-                <label className="block text-[13px] font-medium text-brand-dim">
-                  المبلغ المعتمد (ج.م)
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    max={activeModalRequest.wallet_remaining_limit ?? 200000}
-                    disabled={isPending}
-                    value={approvedAmount}
-                    onChange={(e) => setApprovedAmount(e.target.value)}
-                    className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3 text-sm text-white focus:outline-none focus:border-brand-accent transition-all text-left dir-ltr font-inter"
-                  />
-                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 font-bold select-none text-xs">
-                    $
-                  </span>
+              {/* Multi-Wallet Breakdown Inputs */}
+              {activeModalRequest.is_multi_wallet && Array.isArray(activeModalRequest.multi_wallet_data) && (
+                <div className="space-y-3 p-4 bg-[#070814]/40 border border-brand-border/45 rounded-xl">
+                  <p className="text-xs font-bold text-white mb-1 font-cairo">المبلغ المعتمد لكل رقم:</p>
+                  <div className="space-y-3.5 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+                    {activeModalRequest.multi_wallet_data.map((item: any, idx: number) => (
+                      <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs bg-[#070814]/60 p-3 rounded-lg border border-brand-border/20">
+                        <div className="text-right space-y-0.5 font-cairo">
+                          <div className="font-mono text-white font-bold text-xs">{item.phone_number}</div>
+                          {item.esim_number && (
+                            <div className="text-[10px] text-brand-dim">الشريحة: {item.esim_number}</div>
+                          )}
+                          <div className="text-[10px] text-brand-accent">المطلوب: {Number(item.amount_requested || item.amount).toLocaleString("en-US")} ج.م</div>
+                        </div>
+                        <div className="relative w-full sm:w-36">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            disabled={isPending}
+                            value={multiApprovedAmounts[item.wallet_id] ?? ""}
+                            onChange={(e) => {
+                              const newAmounts = { ...multiApprovedAmounts };
+                              newAmounts[item.wallet_id] = e.target.value;
+                              setMultiApprovedAmounts(newAmounts);
+
+                              // Update total amount display
+                              let total = 0;
+                              activeModalRequest.multi_wallet_data.forEach((w: any) => {
+                                const val = parseFloat(w.wallet_id === item.wallet_id ? e.target.value : (newAmounts[w.wallet_id] || "0"));
+                                if (!isNaN(val)) total += val;
+                              });
+                              setApprovedAmount(String(total));
+                            }}
+                            className="w-full bg-[#05060f] border border-brand-border/80 rounded-lg pl-3 pr-8 py-2 text-xs text-white focus:outline-none focus:border-brand-accent text-left dir-ltr font-inter"
+                          />
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 font-bold select-none text-[10px] font-inter">
+                            $
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <p className="text-[10px] text-brand-dim/60 select-none">
-                  * الحد الأقصى المسموح به: <span className="font-inter font-bold">{(activeModalRequest.wallet_remaining_limit ?? 200000).toLocaleString("en-US")} ج.م</span>
-                </p>
-              </div>
+              )}
+
+              {/* Approved Amount Display / Input */}
+              {activeModalRequest.is_multi_wallet ? (
+                <div className="space-y-2 text-right">
+                  <label className="block text-[13px] font-medium text-brand-dim font-cairo">
+                    إجمالي المبلغ المعتمد (ج.م)
+                  </label>
+                  <div className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl px-4 py-3.5 text-sm text-brand-accent font-bold font-inter text-left dir-ltr">
+                    {parseFloat(approvedAmount || "0").toLocaleString("en-US")} ج.م
+                  </div>
+                  <p className="text-[10px] text-amber-400 select-none font-semibold font-cairo">
+                    * يرجى إدخال المبلغ المعتمد لكل محفظة بشكل منفصل. القيمة غير المدخلة سيتم اعتبارها صفر.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <label className="block text-[13px] font-medium text-brand-dim font-cairo">
+                    المبلغ المعتمد (ج.م)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      max={activeModalRequest.wallet_remaining_limit ?? 200000}
+                      disabled={isPending}
+                      value={approvedAmount}
+                      onChange={(e) => setApprovedAmount(e.target.value)}
+                      className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3 text-sm text-white focus:outline-none focus:border-brand-accent transition-all text-left dir-ltr font-inter"
+                    />
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 font-bold select-none text-xs">
+                      $
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-brand-dim/60 select-none font-cairo">
+                    * الحد الأقصى المسموح به: <span className="font-inter font-bold">{(activeModalRequest.wallet_remaining_limit ?? 200000).toLocaleString("en-US")} ج.م</span>
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Modal Footer */}

@@ -17,6 +17,8 @@ export interface AdminFundRequest {
   created_at: string;
   wallet_balance: number;
   wallet_remaining_limit?: number;
+  is_multi_wallet?: boolean;
+  multi_wallet_data?: any;
   agent: {
     full_name: string;
   } | null;
@@ -323,7 +325,8 @@ export async function getSingleFundRequest(requestId: string) {
 export async function reviewFundRequest(
   requestId: string,
   status: "approved" | "rejected",
-  approvedAmount?: number
+  approvedAmount?: number,
+  multiApprovedBreakdown?: Array<{ walletId: string; amountApproved: number }>
 ) {
   try {
     const user = await getCurrentUser();
@@ -349,7 +352,7 @@ export async function reviewFundRequest(
     // 2. Fetch original request details to check its status
     const { data: request, error: requestError } = await supabaseAdmin
       .from("fund_requests")
-      .select("status, amount_requested, wallet_id, agent_id")
+      .select("status, amount_requested, wallet_id, agent_id, is_multi_wallet, multi_wallet_data")
       .eq("id", requestId)
       .single();
 
@@ -369,40 +372,145 @@ export async function reviewFundRequest(
     };
 
     if (status === "approved") {
-      const finalAmount = approvedAmount !== undefined ? approvedAmount : request.amount_requested;
-      if (isNaN(finalAmount) || finalAmount <= 0) {
-        return { success: false, error: "يجب إدخال مبلغ معتمد صحيح أكبر من الصفر." };
-      }
-      updateData.amount_approved = finalAmount;
+      if (request.is_multi_wallet && Array.isArray(request.multi_wallet_data)) {
+        if (multiApprovedBreakdown && Array.isArray(multiApprovedBreakdown) && multiApprovedBreakdown.length > 0) {
+          // Explicit individual amounts flow
+          let totalApproved = 0;
+          const updatedMultiData: any[] = [];
 
-      // Update the wallet current_balance and approved_monthly_requests in the DB
-      const { data: wallet, error: walletError } = await supabaseAdmin
-        .from("wallets")
-        .select("current_balance, approved_monthly_requests")
-        .eq("id", request.wallet_id)
-        .single();
+          for (const item of request.multi_wallet_data) {
+            const breakdownItem = multiApprovedBreakdown.find((b) => b.walletId === item.wallet_id);
+            const itemApproved = breakdownItem ? breakdownItem.amountApproved : 0;
+            totalApproved += itemApproved;
 
-      if (walletError || !wallet) {
-        console.error("Error fetching wallet details on approval:", walletError);
+            updatedMultiData.push({
+              ...item,
+              amount_approved: itemApproved,
+            });
+
+            if (itemApproved > 0) {
+              // Fetch and update the individual wallet
+              const { data: wallet, error: walletError } = await supabaseAdmin
+                .from("wallets")
+                .select("current_balance, approved_monthly_requests")
+                .eq("id", item.wallet_id)
+                .single();
+
+              if (walletError || !wallet) {
+                console.error("Error fetching wallet details on approval:", walletError);
+              } else {
+                const newVal = (Number(wallet.current_balance) || 0) + itemApproved;
+                const newApproved = (Number(wallet.approved_monthly_requests) || 0) + itemApproved;
+
+                const { error: walletUpdateErr } = await supabaseAdmin
+                  .from("wallets")
+                  .update({
+                    current_balance: newVal,
+                    approved_monthly_requests: newApproved,
+                  })
+                  .eq("id", item.wallet_id);
+
+                if (walletUpdateErr) {
+                  console.error("Error updating wallet balance on approval:", walletUpdateErr);
+                }
+              }
+            }
+          }
+
+          if (totalApproved <= 0) {
+            return { success: false, error: "يجب أن يكون إجمالي المبلغ المعتمد أكبر من الصفر." };
+          }
+
+          updateData.amount_approved = totalApproved;
+          updateData.multi_wallet_data = updatedMultiData;
+        } else {
+          // Fallback to proportional distribution flow if not provided
+          const finalAmount = approvedAmount !== undefined ? approvedAmount : request.amount_requested;
+          if (isNaN(finalAmount) || finalAmount <= 0) {
+            return { success: false, error: "يجب إدخال مبلغ معتمد صحيح أكبر من الصفر." };
+          }
+          updateData.amount_approved = finalAmount;
+
+          const ratio = finalAmount / request.amount_requested;
+          const updatedMultiData: any[] = [];
+
+          for (const item of request.multi_wallet_data) {
+            const itemApproved = Math.round((item.amount_requested || item.amount) * ratio * 100) / 100;
+            updatedMultiData.push({
+              ...item,
+              amount_approved: itemApproved,
+            });
+
+            // Fetch and update the individual wallet
+            const { data: wallet, error: walletError } = await supabaseAdmin
+              .from("wallets")
+              .select("current_balance, approved_monthly_requests")
+              .eq("id", item.wallet_id)
+              .single();
+
+            if (walletError || !wallet) {
+              console.error("Error fetching wallet details on approval:", walletError);
+            } else {
+              const newVal = (Number(wallet.current_balance) || 0) + itemApproved;
+              const newApproved = (Number(wallet.approved_monthly_requests) || 0) + itemApproved;
+
+              const { error: walletUpdateErr } = await supabaseAdmin
+                .from("wallets")
+                .update({
+                  current_balance: newVal,
+                  approved_monthly_requests: newApproved,
+                })
+                .eq("id", item.wallet_id);
+
+              if (walletUpdateErr) {
+                console.error("Error updating wallet balance on approval:", walletUpdateErr);
+              }
+            }
+          }
+          updateData.multi_wallet_data = updatedMultiData;
+        }
       } else {
-        const newVal = (Number(wallet.current_balance) || 0) + finalAmount;
-        const newApproved = (Number(wallet.approved_monthly_requests) || 0) + finalAmount;
+        // Single wallet flow
+        const finalAmount = approvedAmount !== undefined ? approvedAmount : request.amount_requested;
+        if (isNaN(finalAmount) || finalAmount <= 0) {
+          return { success: false, error: "يجب إدخال مبلغ معتمد صحيح أكبر من الصفر." };
+        }
+        updateData.amount_approved = finalAmount;
 
-        const { error: walletUpdateErr } = await supabaseAdmin
+        const { data: wallet, error: walletError } = await supabaseAdmin
           .from("wallets")
-          .update({
-            current_balance: newVal,
-            approved_monthly_requests: newApproved,
-          })
-          .eq("id", request.wallet_id);
+          .select("current_balance, approved_monthly_requests")
+          .eq("id", request.wallet_id)
+          .single();
 
-        if (walletUpdateErr) {
-          console.error("Error updating wallet balance on approval:", walletUpdateErr);
-          return { success: false, error: "حدث خطأ أثناء تحديث رصيد المحفظة." };
+        if (walletError || !wallet) {
+          console.error("Error fetching wallet details on approval:", walletError);
+        } else {
+          const newVal = (Number(wallet.current_balance) || 0) + finalAmount;
+          const newApproved = (Number(wallet.approved_monthly_requests) || 0) + finalAmount;
+
+          const { error: walletUpdateErr } = await supabaseAdmin
+            .from("wallets")
+            .update({
+              current_balance: newVal,
+              approved_monthly_requests: newApproved,
+            })
+            .eq("id", request.wallet_id);
+
+          if (walletUpdateErr) {
+            console.error("Error updating wallet balance on approval:", walletUpdateErr);
+            return { success: false, error: "حدث خطأ أثناء تحديث رصيد المحفظة." };
+          }
         }
       }
     } else {
       updateData.amount_approved = 0;
+      if (request.is_multi_wallet && Array.isArray(request.multi_wallet_data)) {
+        updateData.multi_wallet_data = request.multi_wallet_data.map((item: any) => ({
+          ...item,
+          amount_approved: 0,
+        }));
+      }
     }
 
     // 4. Update the DB row using admin client

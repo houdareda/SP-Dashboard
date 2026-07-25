@@ -696,16 +696,53 @@ export default function LogsClient({
                           {formatDate(req.request_date)}
                         </td>
                         <td className="py-4 font-mono font-bold text-white/90">
-                          {req.wallet?.phone_number || "-"}
+                          {req.is_multi_wallet ? (
+                            <div className="space-y-0.5 text-right font-cairo">
+                              <span className="inline-block px-1.5 py-0.5 text-[8.5px] font-extrabold bg-brand-accent/20 text-brand-accent border border-brand-accent/30 rounded-md mb-1 select-none">
+                                متعدد المحافظ
+                              </span>
+                              {Array.isArray(req.multi_wallet_data) ? (
+                                req.multi_wallet_data.map((item: any, idx: number) => (
+                                  <div key={idx} className="text-[10px] font-semibold text-white/80">
+                                    {item.phone_number} {item.esim_number ? `(${item.esim_number})` : ""}
+                                  </div>
+                                ))
+                              ) : (
+                                <span>{req.wallet?.phone_number || "-"}</span>
+                              )}
+                            </div>
+                          ) : (
+                            req.wallet?.phone_number || "-"
+                          )}
                         </td>
                         <td className="py-4 font-bold text-white font-inter text-sm">
-                          {Number(req.amount_requested).toLocaleString("en-US")} ج.م
+                          <div>{Number(req.amount_requested).toLocaleString("en-US")} ج.م</div>
+                          {req.is_multi_wallet && Array.isArray(req.multi_wallet_data) && (
+                            <div className="text-[9.5px] text-brand-dim/80 space-y-0.5 mt-0.5 font-normal font-inter">
+                              {req.multi_wallet_data.map((item: any, idx: number) => (
+                                <div key={idx}>
+                                  {Number(item.amount_requested || item.amount).toLocaleString("en-US")} ج.م
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </td>
-                        <td className="py-4">
+                        <td className="py-4 font-inter">
                           {req.status === "approved" ? (
-                            <span className="font-bold text-brand-accent text-sm font-inter">
-                              {Number(req.amount_approved).toLocaleString("en-US")} ج.م
-                            </span>
+                            <div>
+                              <span className="font-bold text-brand-accent text-sm">
+                                {Number(req.amount_approved).toLocaleString("en-US")} ج.م
+                              </span>
+                              {req.is_multi_wallet && Array.isArray(req.multi_wallet_data) && (
+                                <div className="text-[9.5px] text-brand-dim/80 space-y-0.5 mt-0.5 font-normal font-inter">
+                                  {req.multi_wallet_data.map((item: any, idx: number) => (
+                                    <div key={idx}>
+                                      {Number(item.amount_approved).toLocaleString("en-US")} ج.م
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           ) : (
                             <span className="text-brand-dim/30">—</span>
                           )}

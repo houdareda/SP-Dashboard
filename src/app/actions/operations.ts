@@ -55,6 +55,13 @@ export interface FundRequestInput {
   walletId: string;
   requestDate: string; // 'YYYY-MM-DD'
   amountRequested: number;
+  isMultiWallet?: boolean;
+  multiWalletData?: Array<{
+    walletId: string;
+    phoneNumber: string;
+    esimNumber?: string;
+    amount: number;
+  }>;
 }
 
 /**
@@ -111,14 +118,31 @@ export async function submitFundRequest(input: FundRequestInput, passwordConfirm
       return { success: false, error: "غير مصرح بالعملية. الرجاء تسجيل الدخول أولاً." };
     }
 
-    const { walletId, requestDate, amountRequested } = input;
+    const { walletId, requestDate, amountRequested, isMultiWallet, multiWalletData } = input;
 
     // 1. Basic validation
-    if (!walletId) {
-      return { success: false, error: "المحفظة المحددة غير صالحة." };
-    }
-    if (amountRequested <= 0) {
-      return { success: false, error: "يجب أن يكون المبلغ المطلوب أكبر من الصفر." };
+    if (isMultiWallet) {
+      if (!multiWalletData || !Array.isArray(multiWalletData) || multiWalletData.length === 0) {
+        return { success: false, error: "يرجى تحديد المحافظ والمبالغ المطلوبة." };
+      }
+      if (multiWalletData.length > 3) {
+        return { success: false, error: "لا يمكن طلب الشحن لأكثر من 3 محافظ في المرة الواحدة." };
+      }
+      for (const item of multiWalletData) {
+        if (!item.walletId) {
+          return { success: false, error: "المحفظة المحددة غير صالحة." };
+        }
+        if (item.amount <= 0) {
+          return { success: false, error: "يجب أن تكون المبالغ المطلوبة أكبر من الصفر." };
+        }
+      }
+    } else {
+      if (!walletId) {
+        return { success: false, error: "المحفظة المحددة غير صالحة." };
+      }
+      if (amountRequested <= 0) {
+        return { success: false, error: "يجب أن يكون المبلغ المطلوب أكبر من الصفر." };
+      }
     }
 
     // 2. Validate date (Egypt local time constraints)
@@ -146,19 +170,85 @@ export async function submitFundRequest(input: FundRequestInput, passwordConfirm
       return { success: false, error: "حسابك موقوف، غير مصرح لك باتخاذ أي إجراء." };
     }
 
-    // Verify the wallet belongs to the agent and is active
-    const { data: wallet, error: walletErr } = await supabaseAdmin
-      .from("wallets")
-      .select("id, is_active, start_of_month_balance")
-      .eq("id", walletId)
-      .eq("agent_id", user.id)
-      .single();
+    const currentMonthStr = todayStr.substring(0, 7);
+    const startOfMonth = `${currentMonthStr}-01`;
+    const lastDay = new Date(Number(currentMonthStr.substring(0, 4)), Number(currentMonthStr.substring(5, 7)), 0).getDate();
+    const endOfMonth = `${currentMonthStr}-${String(lastDay).padStart(2, "0")}`;
 
-    if (walletErr || !wallet) {
-      return { success: false, error: "المحفظة المحددة غير صحيحة أو لا تنتمي إليك." };
-    }
-    if (!wallet.is_active) {
-      return { success: false, error: "المحفظة المحددة غير نشطة حالياً." };
+    // Verify active wallets belong to the agent and check 200k balance limit constraint
+    if (isMultiWallet && multiWalletData) {
+      for (const wItem of multiWalletData) {
+        const { data: wDetail, error: wErr } = await supabaseAdmin
+          .from("wallets")
+          .select("id, is_active, start_of_month_balance, phone_number")
+          .eq("id", wItem.walletId)
+          .eq("agent_id", user.id)
+          .single();
+
+        if (wErr || !wDetail) {
+          return { success: false, error: `المحفظة المحددة (${wItem.phoneNumber}) غير صحيحة أو لا تنتمي إليك.` };
+        }
+        if (!wDetail.is_active) {
+          return { success: false, error: `المحفظة (${wItem.phoneNumber}) غير نشطة حالياً.` };
+        }
+
+        // Calculate limit
+        const { data: approvedRequests } = await supabaseAdmin
+          .from("fund_requests")
+          .select("amount_approved")
+          .eq("wallet_id", wItem.walletId)
+          .eq("status", "approved")
+          .gte("request_date", startOfMonth)
+          .lte("request_date", endOfMonth);
+
+        const starting = Number(wDetail.start_of_month_balance) || 0;
+        const approvedSum = (approvedRequests || []).reduce((sum, req) => sum + (Number(req.amount_approved) || 0), 0);
+        const totalConsumed = starting + approvedSum;
+        const available = 200000 - totalConsumed;
+
+        if (wItem.amount > available) {
+          return {
+            success: false,
+            error: `لا يمكنك طلب (${wItem.amount.toLocaleString("en-US")} ج.م) للمحفظة (${wDetail.phone_number}). المتاح لها هذا الشهر هو (${available.toLocaleString("en-US")} ج.م) لتجنب تجاوز الحد الأقصى للرصيد (200 ألف ج.م).`,
+          };
+        }
+      }
+    } else {
+      // Verify single wallet
+      const { data: walletDetail, error: wErr } = await supabaseAdmin
+        .from("wallets")
+        .select("id, is_active, start_of_month_balance")
+        .eq("id", walletId)
+        .eq("agent_id", user.id)
+        .single();
+
+      if (wErr || !walletDetail) {
+        return { success: false, error: "المحفظة المحددة غير صحيحة أو لا تنتمي إليك." };
+      }
+      if (!walletDetail.is_active) {
+        return { success: false, error: "المحفظة المحددة غير نشطة حالياً." };
+      }
+
+      // Calculate limit
+      const { data: approvedRequests } = await supabaseAdmin
+        .from("fund_requests")
+        .select("amount_approved")
+        .eq("wallet_id", walletId)
+        .eq("status", "approved")
+        .gte("request_date", startOfMonth)
+        .lte("request_date", endOfMonth);
+
+      const starting = Number(walletDetail.start_of_month_balance) || 0;
+      const approvedSum = (approvedRequests || []).reduce((sum, req) => sum + (Number(req.amount_approved) || 0), 0);
+      const totalConsumed = starting + approvedSum;
+      const available = 200000 - totalConsumed;
+
+      if (amountRequested > available) {
+        return {
+          success: false,
+          error: `لا يمكنك طلب (${amountRequested.toLocaleString("en-US")} ج.م). المتاح لك هذا الشهر لهذه المحفظة هو (${available.toLocaleString("en-US")} ج.م) فقط لتجنب تجاوز الحد الأقصى للرصيد (200 ألف ج.م).`,
+        };
+      }
     }
 
     // 3. Limit validation using admin client (max 2 fund requests per day)
@@ -181,34 +271,7 @@ export async function submitFundRequest(input: FundRequestInput, passwordConfirm
       };
     }
 
-    // 4. Verify wallet balance limit constraint (balance cannot exceed 200k)
-    // current monthly limit calculation: start_of_month_balance + approved_monthly_requests in the current calendar month
-    const currentMonthStr = todayStr.substring(0, 7);
-    const startOfMonth = `${currentMonthStr}-01`;
-    const lastDay = new Date(Number(currentMonthStr.substring(0, 4)), Number(currentMonthStr.substring(5, 7)), 0).getDate();
-    const endOfMonth = `${currentMonthStr}-${String(lastDay).padStart(2, "0")}`;
-
-    const { data: approvedRequests } = await supabaseAdmin
-      .from("fund_requests")
-      .select("amount_approved")
-      .eq("wallet_id", walletId)
-      .eq("status", "approved")
-      .gte("request_date", startOfMonth)
-      .lte("request_date", endOfMonth);
-
-    const starting = Number(wallet.start_of_month_balance) || 0;
-    const approvedSum = (approvedRequests || []).reduce((sum, req) => sum + (Number(req.amount_approved) || 0), 0);
-    const totalConsumed = starting + approvedSum;
-    const available = 200000 - totalConsumed;
-
-    if (amountRequested > available) {
-      return {
-        success: false,
-        error: `لا يمكنك طلب (${amountRequested.toLocaleString("en-US")} ج.م). المتاح لك هذا الشهر لهذه المحفظة هو (${available.toLocaleString("en-US")} ج.م) فقط لتجنب تجاوز الحد الأقصى للرصيد (200 ألف ج.م).`,
-      };
-    }
-
-    // 5. Password validation
+    // 4. Password validation
     if (!user.email) {
       return { success: false, error: "لم يتم العثور على البريد الإلكتروني للمستخدم." };
     }
@@ -218,16 +281,30 @@ export async function submitFundRequest(input: FundRequestInput, passwordConfirm
       return { success: false, error: "كلمة المرور غير صحيحة. يرجى المحاولة مرة أخرى." };
     }
 
-    // 6. Insert request as 'pending'
+    // 5. Insert request as 'pending'
+    const insertPayload: any = {
+      agent_id: user.id,
+      wallet_id: walletId,
+      request_date: requestDate,
+      amount_requested: amountRequested,
+      status: "pending",
+      is_multi_wallet: !!isMultiWallet,
+    };
+
+    if (isMultiWallet && multiWalletData) {
+      const mappedMultiData = multiWalletData.map((item) => ({
+        wallet_id: item.walletId,
+        phone_number: item.phoneNumber,
+        esim_number: item.esimNumber || "",
+        amount_requested: item.amount,
+        amount_approved: item.amount,
+      }));
+      insertPayload.multi_wallet_data = mappedMultiData;
+    }
+
     const { data: request, error: insertError } = await supabaseAdmin
       .from("fund_requests")
-      .insert({
-        agent_id: user.id,
-        wallet_id: walletId,
-        request_date: requestDate,
-        amount_requested: amountRequested,
-        status: "pending",
-      })
+      .insert(insertPayload)
       .select()
       .single();
 
@@ -236,7 +313,7 @@ export async function submitFundRequest(input: FundRequestInput, passwordConfirm
       return { success: false, error: `فشل إرسال الطلب: ${insertError.message}` };
     }
 
-    // 7. Send notifications to admins and accountants
+    // 6. Send notifications to admins and accountants
     try {
       const { data: staffMembers } = await supabaseAdmin
         .from("profiles")
@@ -245,7 +322,7 @@ export async function submitFundRequest(input: FundRequestInput, passwordConfirm
         .eq("is_active", true);
 
       if (staffMembers && staffMembers.length > 0) {
-        const title = "طلب شحن رصيد جديد";
+        const title = isMultiWallet ? "طلب شحن رصيد متعدد جديد" : "طلب شحن رصيد جديد";
         const message = `قام الموظف ${profile.full_name} بطلب شحن رصيد بقيمة ${amountRequested.toLocaleString("en-US")} ج.م`;
         
         await Promise.all(

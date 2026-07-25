@@ -360,7 +360,7 @@ export default function WalletsClient({ initialWallets }: WalletsClientProps) {
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-accent opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-brand-accent"></span>
                     </span>
-                    <span>eSIM: {wallet.esim_number}</span>
+                    <span>الشريحة: {wallet.esim_number}</span>
                   </span>
                 </div>
               )}
@@ -644,7 +644,7 @@ export default function WalletsClient({ initialWallets }: WalletsClientProps) {
               {/* eSIM Number Input */}
               <div className="space-y-2">
                 <label htmlFor="esimNumber" className="block text-sm font-bold text-white/90 mb-1">
-                  رقم الشريحة الإلكترونية (eSIM)
+                  رقم الشريحة
                 </label>
                 <div className="relative">
                   <input
@@ -831,7 +831,7 @@ export default function WalletsClient({ initialWallets }: WalletsClientProps) {
               {/* eSIM Number Input */}
               <div className="space-y-1.5">
                 <label htmlFor="editEsim" className="block text-xs font-semibold text-brand-dim">
-                  رقم الشريحة الإلكترونية (eSIM)
+                  رقم الشريحة
                 </label>
                 <div className="relative">
                   <input
