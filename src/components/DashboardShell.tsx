@@ -221,6 +221,22 @@ export default function DashboardShell({
     };
   }, [userId]);
 
+  // Sync auth state across open tabs (detect sign out or login with another account in a different tab)
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT" || !session) {
+        window.location.href = "/login";
+      } else if (session?.user?.id && session.user.id !== userId) {
+        // Session changed to a different user in another tab! Hard reload to refresh dashboard cleanly.
+        window.location.href = "/dashboard";
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [userId]);
+
   const handleMarkAsRead = async (id: string) => {
     try {
       const { error } = await supabase

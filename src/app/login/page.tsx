@@ -15,7 +15,7 @@ export default function LoginPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Check if user already has an active session
+    // Check if user already has a valid active session
     const checkSession = async () => {
       try {
         const params = new URLSearchParams(window.location.search);
@@ -33,13 +33,22 @@ export default function LoginPage() {
           return;
         }
 
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
+        // Validate session with Supabase server instead of reading unvalidated localStorage
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (user && !error) {
           setIsRedirecting(true);
-          router.push("/dashboard");
+          window.location.href = "/dashboard";
+        } else {
+          // If session is expired or rotated from another tab/host, clear stale local session
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            await supabase.auth.signOut();
+          }
+          setIsRedirecting(false);
         }
       } catch (err) {
         console.error("Session check error:", err);
+        setIsRedirecting(false);
       }
     };
     checkSession();
@@ -49,17 +58,23 @@ export default function LoginPage() {
       const params = new URLSearchParams(window.location.search);
       const errorParam = params.get("error");
       
-      // Only auto-redirect if there's no auth error parameter present
-      if (session && errorParam !== "profile_not_found" && errorParam !== "deactivated") {
-        setIsRedirecting(true);
-        router.push("/dashboard");
+      // Only auto-redirect if there's a valid session and no auth error parameter present
+      if (session && event === "SIGNED_IN" && errorParam !== "profile_not_found" && errorParam !== "deactivated") {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (user && !error) {
+          setIsRedirecting(true);
+          window.location.href = "/dashboard";
+        } else {
+          await supabase.auth.signOut();
+          setIsRedirecting(false);
+        }
       }
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [router]);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,9 +91,9 @@ export default function LoginPage() {
         throw error;
       }
 
-      // If successful, show the redirect overlay and navigate
+      // If successful, show the redirect overlay and navigate with a full page load
       setIsRedirecting(true);
-      router.push("/dashboard");
+      window.location.href = "/dashboard";
     } catch (err: any) {
       console.error("Login error:", err);
       // Friendly Arabic message for common credentials issues
@@ -97,13 +112,19 @@ export default function LoginPage() {
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-brand-accent/10 rounded-full blur-[120px] pointer-events-none" />
       
       {isRedirecting && (
-        <div className="fixed inset-0 bg-[#05060f]/95 backdrop-blur-md z-[100] flex flex-col items-center justify-center font-cairo">
-          <div className="flex flex-col items-center gap-4 text-center">
+        <div
+          onClick={() => setIsRedirecting(false)}
+          className="fixed inset-0 bg-[#05060f]/95 backdrop-blur-md z-[100] flex flex-col items-center justify-center font-cairo cursor-pointer select-none"
+        >
+          <div className="flex flex-col items-center gap-4 text-center px-4">
             <div className="w-16 h-16 rounded-2xl bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center shadow-[0_0_30px_rgba(139,92,246,0.15)] animate-pulse">
               <Loader2 size={32} className="text-brand-accent animate-spin" />
             </div>
             <h2 className="text-xl font-bold text-white tracking-wide">تم تسجيل الدخول بنجاح!</h2>
             <p className="text-sm text-brand-dim mt-1">جاري تهيئة لوحة التحكم وتحميل البيانات...</p>
+            <span className="text-[11px] text-white/30 mt-3 hover:text-white/60 transition-colors">
+              (إذا استغرق التوجيه وقتاً، اضغط في أي مكان للإلغاء والعودة لصفحة الدخول)
+            </span>
           </div>
         </div>
       )}

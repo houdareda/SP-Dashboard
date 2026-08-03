@@ -1373,7 +1373,7 @@ export default function OperationsClient({
                     </div>
 
                     {/* 4. Total Cash after Expenses (توتال الكاش بعد خصم التحويلات والمصاريف الشخصية) */}
-                    <div className="space-y-2">
+                    <div className="space-y-2 md:col-span-2">
                       <label htmlFor="cashAfterExpenses" className="block text-[13px] font-medium text-brand-dim font-cairo font-semibold">
                         توتال الكاش بعد خصم التحويلات والمصاريف الشخصية (ج.م)
                       </label>
@@ -1394,7 +1394,7 @@ export default function OperationsClient({
                     </div>
 
                     {/* 5. Marketing 1 (مصاريف ماركتنج 1 (ج.م)) */}
-                    <div className="space-y-2">
+                    <div className="space-y-2 md:col-span-2">
                       <label htmlFor="marketing1" className="block text-[13px] font-medium text-brand-dim">
                         مصاريف ماركتنج 1 (ج.م)
                       </label>
@@ -1417,7 +1417,7 @@ export default function OperationsClient({
                     </div>
 
                     {/* 6. Marketing 2 (مصاريف ماركتنج 2 (ج.م)) */}
-                    <div className="space-y-2">
+                    <div className="space-y-2 md:col-span-2">
                       <label htmlFor="marketing2" className="block text-[13px] font-medium text-brand-dim font-semibold text-brand-accent">
                         مصاريف ماركتنج 2 (ج.م) *(تلقائي)
                       </label>
@@ -1441,7 +1441,7 @@ export default function OperationsClient({
                     </div>
 
                     {/* 7. Marketing 3 (مصاريف ماركتنج 3 (ج.م)) */}
-                    <div className="space-y-2">
+                    <div className="space-y-2 md:col-span-2">
                       <label htmlFor="marketing3" className="block text-[13px] font-medium text-brand-dim">
                         مصاريف ماركتنج 3 (ج.م)
                       </label>
@@ -1814,8 +1814,29 @@ export default function OperationsClient({
                         </div>
                       </div>
 
-                      {/* 4. Marketing 1 */}
-                      <div className="space-y-2 text-right">
+                      {/* 4. Read-Only Total Cash after Expenses */}
+                      <div className="space-y-2 text-right md:col-span-2">
+                        <label htmlFor="editCashAfterExpenses" className="block text-[13px] font-medium text-brand-dim font-cairo font-semibold">
+                          توتال الكاش بعد خصم التحويلات والمصاريف الشخصية المقترح (ج.م)
+                        </label>
+                        <div className="relative">
+                          <input
+                            id="editCashAfterExpenses"
+                            type="text"
+                            readOnly
+                            disabled={isPending}
+                            value={editTotalCash !== "" ? editCashAfterExpenses.toFixed(2) : "0.00"}
+                            placeholder="0.00"
+                            className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
+                          />
+                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
+                            <Coins size={16} />
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 5. Marketing 1 */}
+                      <div className="space-y-2 text-right md:col-span-2">
                         <label htmlFor="editMarketing1" className="block text-[13px] font-medium text-brand-dim">
                           مصاريف ماركتنج 1 المقترحة (ج.م)
                         </label>
@@ -1837,8 +1858,29 @@ export default function OperationsClient({
                         </div>
                       </div>
 
-                      {/* 5. Marketing 3 */}
-                      <div className="space-y-2 text-right">
+                      {/* 6. Read-only dynamic Marketing 2 */}
+                      <div className="space-y-2 text-right md:col-span-2">
+                        <label htmlFor="editMarketing2" className="block text-[13px] font-medium text-brand-dim font-cairo font-semibold text-brand-accent">
+                          مصاريف ماركتنج 2 المقترحة (ج.م) *تلقائي
+                        </label>
+                        <div className="relative">
+                          <input
+                            id="editMarketing2"
+                            type="text"
+                            readOnly
+                            disabled={isPending}
+                            value={editTotalCash !== "" ? computedEditMarketing2.toFixed(2) : "0.00"}
+                            placeholder="0.00"
+                            className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
+                          />
+                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
+                            <Coins size={16} />
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 7. Marketing 3 */}
+                      <div className="space-y-2 text-right md:col-span-2">
                         <label htmlFor="editMarketing3" className="block text-[13px] font-medium text-brand-dim">
                           مصاريف ماركتنج 3 المقترحة (ج.م)
                         </label>
@@ -1860,29 +1902,8 @@ export default function OperationsClient({
                         </div>
                       </div>
 
-                      {/* 6. Read-only dynamic Marketing 2 */}
-                      <div className="space-y-2 text-right">
-                        <label htmlFor="editMarketing2" className="block text-[13px] font-medium text-brand-dim font-cairo font-semibold text-brand-accent">
-                          مصاريف ماركتنج 2 المقترحة (ج.م) *تلقائي
-                        </label>
-                        <div className="relative">
-                          <input
-                            id="editMarketing2"
-                            type="text"
-                            readOnly
-                            disabled={isPending}
-                            value={editTotalCash !== "" ? computedEditMarketing2.toFixed(2) : "0.00"}
-                            placeholder="0.00"
-                            className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
-                          />
-                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
-                            <Coins size={16} />
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* 7. Read-Only computed editTotalAmount */}
-                      <div className="space-y-2 text-right">
+                      {/* 8. Read-Only computed editTotalAmount */}
+                      <div className="space-y-2 text-right md:col-span-2">
                         <label htmlFor="editTotalAmount" className="block text-[13px] font-medium text-brand-dim font-cairo font-semibold">
                           إجمالي مصروفات المحفظة المقترح (ج.م) *تلقائي
                         </label>
@@ -1898,27 +1919,6 @@ export default function OperationsClient({
                           />
                           <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
                             <ClipboardList size={16} />
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* 8. Read-Only Total Cash after Expenses */}
-                      <div className="space-y-2 text-right">
-                        <label htmlFor="editCashAfterExpenses" className="block text-[13px] font-medium text-brand-dim font-cairo font-semibold">
-                          توتال الكاش بعد خصم التحويلات والمصاريف الشخصية المقترح (ج.م)
-                        </label>
-                        <div className="relative">
-                          <input
-                            id="editCashAfterExpenses"
-                            type="text"
-                            readOnly
-                            disabled={isPending}
-                            value={editTotalCash !== "" ? editCashAfterExpenses.toFixed(2) : "0.00"}
-                            placeholder="0.00"
-                            className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
-                          />
-                          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
-                            <Coins size={16} />
                           </span>
                         </div>
                       </div>

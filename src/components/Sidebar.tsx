@@ -195,10 +195,10 @@ export default function Sidebar({
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
-      router.push("/login");
-      router.refresh();
+      window.location.href = "/login";
     } catch (err) {
       console.error("Error signing out:", err);
+      window.location.href = "/login";
     }
   };
 
