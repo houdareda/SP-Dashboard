@@ -10,6 +10,7 @@ export interface WalletData {
   agent_id: string;
   phone_number: string;
   esim_number?: string;
+  notes?: string;
   is_active: boolean;
   start_of_month_balance: number;
   last_verified_at: string | null;
@@ -117,7 +118,7 @@ export async function getWallets() {
 /**
  * Server Action: Add a new wallet
  */
-export async function addWallet(phoneNumber: string, initialBalance: number, esimNumber?: string) {
+export async function addWallet(phoneNumber: string, initialBalance: number, esimNumber?: string, notes?: string) {
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -140,6 +141,7 @@ export async function addWallet(phoneNumber: string, initialBalance: number, esi
         phone_number: phoneNumber.trim(),
         start_of_month_balance: initialBalance,
         esim_number: esimNumber ? esimNumber.trim() : null,
+        notes: notes ? notes.trim() : null,
         is_active: true,
       })
       .select("*, agent_profile:agent_id(full_name)")
@@ -175,13 +177,14 @@ export async function addWallet(phoneNumber: string, initialBalance: number, esi
 }
 
 /**
- * Server Action: Edit an existing wallet's details (phone number, start of month balance, esim number)
+ * Server Action: Edit an existing wallet's details (phone number, start of month balance, esim number, notes)
  */
 export async function editWallet(
   walletId: string,
   phoneNumber: string,
   startOfMonthBalance: number,
-  esimNumber?: string
+  esimNumber?: string,
+  notes?: string
 ) {
   try {
     const user = await getCurrentUser();
@@ -189,21 +192,43 @@ export async function editWallet(
       return { success: false, error: "غير مصرح بالعملية. الرجاء تسجيل الدخول أولاً." };
     }
 
-    if (!phoneNumber || phoneNumber.trim() === "") {
-      return { success: false, error: "رقم الهاتف مطلوب." };
-    }
-    if (startOfMonthBalance === undefined || startOfMonthBalance === null || isNaN(startOfMonthBalance)) {
-      return { success: false, error: "رصيد أول الشهر غير صحيح." };
+    const supabase = await createClient();
+
+    // Check user profile for role enforcement
+    const { data: userProfile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    const isAgentOrSenior =
+      !userProfile ||
+      userProfile.role === "agent" ||
+      userProfile.role === "senioragent";
+
+    let updateData: any = {
+      esim_number: esimNumber ? esimNumber.trim() : null,
+      notes: notes !== undefined ? (notes ? notes.trim() : null) : null,
+    };
+
+    if (!isAgentOrSenior) {
+      if (!phoneNumber || phoneNumber.trim() === "") {
+        return { success: false, error: "رقم الهاتف مطلوب." };
+      }
+      if (
+        startOfMonthBalance === undefined ||
+        startOfMonthBalance === null ||
+        isNaN(startOfMonthBalance)
+      ) {
+        return { success: false, error: "رصيد أول الشهر غير صحيح." };
+      }
+      updateData.phone_number = phoneNumber.trim();
+      updateData.start_of_month_balance = startOfMonthBalance;
     }
 
-    const supabase = await createClient();
     const { data, error } = await supabase
       .from("wallets")
-      .update({
-        phone_number: phoneNumber.trim(),
-        start_of_month_balance: startOfMonthBalance,
-        esim_number: esimNumber ? esimNumber.trim() : null,
-      })
+      .update(updateData)
       .eq("id", walletId)
       .select("*, agent_profile:agent_id(full_name)")
       .single();

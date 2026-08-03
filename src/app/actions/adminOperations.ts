@@ -1364,3 +1364,91 @@ export async function getAgentsCustodyReport(params: {
     };
   }
 }
+
+/**
+ * Action: Get custody transfers for admin & senior agents with filters & pagination
+ */
+export async function getAdminCustodyTransfersPaginated(params: {
+  page: number;
+  limit: number;
+  startDate?: string;
+  endDate?: string;
+  agentId?: string; // Filter by sender or receiver agent
+}) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "غير مصرح بالعملية", data: [], totalCount: 0 };
+
+    let query = supabaseAdmin
+      .from("expense_transfers")
+      .select("*", { count: "exact" });
+
+    if (params.agentId && params.agentId !== "all") {
+      query = query.or(`from_agent_id.eq.${params.agentId},to_agent_id.eq.${params.agentId}`);
+    }
+
+    if (params.startDate) {
+      query = query.gte("created_at", `${params.startDate}T00:00:00`);
+    }
+    if (params.endDate) {
+      query = query.lte("created_at", `${params.endDate}T23:59:59`);
+    }
+
+    const { data: rawTransfers, count, error } = await query
+      .order("created_at", { ascending: false })
+      .range((params.page - 1) * params.limit, params.page * params.limit - 1);
+
+    if (error) {
+      console.error("getAdminCustodyTransfersPaginated error:", error);
+      return { success: false, error: error.message, data: [], totalCount: 0 };
+    }
+
+    if (!rawTransfers || rawTransfers.length === 0) {
+      return { success: true, data: [], totalCount: 0 };
+    }
+
+    // Collect all involved agent IDs to fetch their names
+    const agentIds = Array.from(
+      new Set(
+        rawTransfers.flatMap((t: any) => [t.from_agent_id, t.to_agent_id]).filter(Boolean)
+      )
+    );
+
+    const { data: profiles } = await supabaseAdmin
+      .from("profiles")
+      .select("id, full_name, role")
+      .in("id", agentIds);
+
+    const profilesMap = new Map<string, { full_name: string; role: string }>();
+    (profiles || []).forEach((p) => {
+      profilesMap.set(p.id, { full_name: p.full_name, role: p.role });
+    });
+
+    const formattedData = rawTransfers.map((t: any) => {
+      const fromProfile = profilesMap.get(t.from_agent_id);
+      const toProfile = profilesMap.get(t.to_agent_id);
+
+      return {
+        id: t.id,
+        expense_id: t.expense_id,
+        from_agent_id: t.from_agent_id,
+        to_agent_id: t.to_agent_id,
+        amount: Number(t.amount) || 0,
+        created_at: t.created_at,
+        from_agent: {
+          full_name: fromProfile?.full_name || "موظف",
+          role: fromProfile?.role || "agent",
+        },
+        to_agent: {
+          full_name: toProfile?.full_name || "موظف",
+          role: toProfile?.role || "agent",
+        },
+      };
+    });
+
+    return { success: true, data: formattedData, totalCount: count || 0 };
+  } catch (err: any) {
+    console.error("getAdminCustodyTransfersPaginated unexpected error:", err);
+    return { success: false, error: err.message, data: [], totalCount: 0 };
+  }
+}

@@ -58,5 +58,6 @@ export default async function WalletsPage() {
     console.error("Error fetching initial wallets:", res.error);
   }
 
-  return <WalletsClient initialWallets={initialWallets} />;
+  return <WalletsClient initialWallets={initialWallets} userRole={currentProfile?.role} />;
 }
+

@@ -6,6 +6,7 @@ import {
   getAgentFundRequestsPaginated,
   getAgentDailyExpensesPaginated,
   getAgentEditRequestsPaginated,
+  getAgentCustodyTransfersPaginated,
 } from "@/app/actions/operations";
 import LogsClient from "./LogsClient";
 
@@ -38,6 +39,7 @@ export default async function LogsPage() {
   const fundRes = await getAgentFundRequestsPaginated({ page: 1, limit: 20 });
   const expenseRes = await getAgentDailyExpensesPaginated({ page: 1, limit: 20 });
   const editRes = await getAgentEditRequestsPaginated({ page: 1, limit: 20 });
+  const transferRes = await getAgentCustodyTransfersPaginated({ page: 1, limit: 20 });
 
   return (
     <LogsClient
@@ -47,6 +49,8 @@ export default async function LogsPage() {
       initialExpenseCount={expenseRes.success && expenseRes.totalCount !== undefined ? expenseRes.totalCount : 0}
       initialEditRequests={editRes.success && editRes.data ? editRes.data : []}
       initialEditCount={editRes.success && editRes.totalCount !== undefined ? editRes.totalCount : 0}
+      initialCustodyTransfers={transferRes.success && transferRes.data ? transferRes.data : []}
+      initialTransferCount={transferRes.success && transferRes.totalCount !== undefined ? transferRes.totalCount : 0}
     />
   );
 }

@@ -1199,7 +1199,7 @@ export default function OperationsClient({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
                 
                     {/* 1. Report Date (تاريخ التقرير) */}
-                    <div className="space-y-2">
+                    <div className="space-y-2 md:col-span-2">
                       <label htmlFor="expenseDate" className="block text-[13px] font-medium text-brand-dim">
                         تاريخ التقرير
                       </label>
@@ -1285,7 +1285,115 @@ export default function OperationsClient({
                       </div>
                     </div>
 
-                    {/* 4. Marketing 1 (مصاريف ماركتنج 1 (ج.م)) */}
+                    {/* Dynamic Custody Transfers Section */}
+                    <div className="md:col-span-2 border-t border-brand-border/20 pt-6 mt-2 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-base font-bold text-white flex items-center gap-2">
+                          <Coins size={16} className="text-brand-accent" />
+                          <span>تحويلات العهدة للزملاء</span>
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={addTransferRow}
+                          disabled={isPending}
+                          className="flex items-center gap-1.5 px-4.5 py-2 bg-brand-accent/15 border border-brand-accent/20 text-brand-accent hover:bg-brand-accent/25 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                        >
+                          <Plus size={14} />
+                          <span>إضافة تحويل لزميل</span>
+                        </button>
+                      </div>
+
+                      {transfers.length > 0 ? (
+                        <div className="space-y-3.5">
+                          {transfers.map((field, idx) => (
+                            <div
+                              key={idx}
+                              className="flex items-center gap-3 bg-[#070814]/30 border border-brand-border/40 p-3 rounded-2xl animate-slide-down flex-wrap sm:flex-nowrap"
+                            >
+                              {/* Colleague Select Dropdown */}
+                              <div className="flex-1 min-w-[200px] space-y-1">
+                                <div className="relative">
+                                  <select
+                                    required
+                                    disabled={isPending}
+                                    value={field.toAgentId}
+                                    onChange={(e) => updateTransferRow(idx, "toAgentId", e.target.value)}
+                                    className="w-full bg-[#070814] border border-brand-border rounded-xl px-4 py-3.5 text-xs text-white focus:outline-none focus:border-brand-accent transition-all cursor-pointer appearance-none pr-10"
+                                  >
+                                    <option value="">اختر الموظف...</option>
+                                    {colleagues.map((c) => (
+                                      <option key={c.id} value={c.id}>
+                                        {c.full_name} ({c.role === "senioragent" ? "Senior Agent" : "موظف"})
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
+                                    <User size={14} />
+                                  </span>
+                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
+                                    <ChevronDown size={14} />
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Amount Input */}
+                              <div className="w-full sm:w-44 space-y-1">
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0.01"
+                                    required
+                                    disabled={isPending}
+                                    placeholder="مبلغ التحويل"
+                                    value={field.amount}
+                                    onChange={(e) => updateTransferRow(idx, "amount", e.target.value)}
+                                    className="w-full bg-[#070814] border border-brand-border rounded-xl pl-4 pr-9 py-3.5 text-xs text-white focus:outline-none focus:border-brand-accent transition-all text-left dir-ltr font-inter"
+                                  />
+                                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none font-bold text-xs select-none">
+                                    $
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Delete Row Button */}
+                              <button
+                                type="button"
+                                onClick={() => removeTransferRow(idx)}
+                                disabled={isPending}
+                                className="w-10 h-10 flex items-center justify-center bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/25 hover:text-white rounded-xl transition-all cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
+                                title="حذف البند"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {/* 4. Total Cash after Expenses (توتال الكاش بعد خصم التحويلات والمصاريف الشخصية) */}
+                    <div className="space-y-2">
+                      <label htmlFor="cashAfterExpenses" className="block text-[13px] font-medium text-brand-dim font-cairo font-semibold">
+                        توتال الكاش بعد خصم التحويلات والمصاريف الشخصية (ج.م)
+                      </label>
+                      <div className="relative">
+                        <input
+                          id="cashAfterExpenses"
+                          type="text"
+                          readOnly
+                          disabled={isPending}
+                          value={totalCash !== "" ? cashAfterExpenses.toFixed(2) : "0.00"}
+                          placeholder="0.00"
+                          className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
+                        />
+                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
+                          <Coins size={16} />
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 5. Marketing 1 (مصاريف ماركتنج 1 (ج.م)) */}
                     <div className="space-y-2">
                       <label htmlFor="marketing1" className="block text-[13px] font-medium text-brand-dim">
                         مصاريف ماركتنج 1 (ج.م)
@@ -1299,29 +1407,6 @@ export default function OperationsClient({
                           disabled={isPending}
                           value={marketing1}
                           onChange={(e) => setMarketing1(e.target.value)}
-                          placeholder="0.00"
-                          className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
-                        />
-                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
-                          <Coins size={16} />
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* 5. Marketing 3 (مصاريف ماركتنج 3 (ج.م)) */}
-                    <div className="space-y-2">
-                      <label htmlFor="marketing3" className="block text-[13px] font-medium text-brand-dim">
-                        مصاريف ماركتنج 3 (ج.م)
-                      </label>
-                      <div className="relative">
-                        <input
-                          id="marketing3"
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          disabled={isPending}
-                          value={marketing3}
-                          onChange={(e) => setMarketing3(e.target.value)}
                           placeholder="0.00"
                           className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
                         />
@@ -1355,8 +1440,31 @@ export default function OperationsClient({
                       </span>
                     </div>
 
-                    {/* 7. Total Expenses & Transfers (إجمالي مصروفات المحفظة) */}
+                    {/* 7. Marketing 3 (مصاريف ماركتنج 3 (ج.م)) */}
                     <div className="space-y-2">
+                      <label htmlFor="marketing3" className="block text-[13px] font-medium text-brand-dim">
+                        مصاريف ماركتنج 3 (ج.م)
+                      </label>
+                      <div className="relative">
+                        <input
+                          id="marketing3"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          disabled={isPending}
+                          value={marketing3}
+                          onChange={(e) => setMarketing3(e.target.value)}
+                          placeholder="0.00"
+                          className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
+                        />
+                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
+                          <Coins size={16} />
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 8. Total Expenses & Transfers (إجمالي مصروفات المحفظة) */}
+                    <div className="space-y-2 md:col-span-2">
                       <label htmlFor="totalAmount" className="block text-[13px] font-medium text-brand-dim font-semibold">
                         إجمالي مصروفات المحفظة (ج.م)
                       </label>
@@ -1379,117 +1487,7 @@ export default function OperationsClient({
                       </span>
                     </div>
 
-                    {/* 8. Total Cash after Expenses (توتال الكاش بعد خصم التحويلات والمصاريف الشخصية) */}
-                    <div className="space-y-2">
-                      <label htmlFor="cashAfterExpenses" className="block text-[13px] font-medium text-brand-dim font-cairo font-semibold">
-                        توتال الكاش بعد خصم التحويلات والمصاريف الشخصية (ج.م)
-                      </label>
-                      <div className="relative">
-                        <input
-                          id="cashAfterExpenses"
-                          type="text"
-                          readOnly
-                          disabled={isPending}
-                          value={totalCash !== "" ? cashAfterExpenses.toFixed(2) : "0.00"}
-                          placeholder="0.00"
-                          className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
-                        />
-                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
-                          <Coins size={16} />
-                        </span>
-                      </div>
-                    </div>
-
                   </div>
-
-
-
-              {/* Dynamic Custody Transfers Section */}
-              <div className="border-t border-brand-border/20 pt-6 mt-8 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
-                    <Coins size={16} className="text-brand-accent" />
-                    <span>تحويلات العهدة للزملاء</span>
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={addTransferRow}
-                    disabled={isPending}
-                    className="flex items-center gap-1.5 px-4.5 py-2 bg-brand-accent/15 border border-brand-accent/20 text-brand-accent hover:bg-brand-accent/25 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-95 disabled:opacity-50"
-                  >
-                    <Plus size={14} />
-                    <span>إضافة تحويل لزميل</span>
-                  </button>
-                </div>
-
-                {transfers.length > 0 ? (
-                  <div className="space-y-3.5">
-                    {transfers.map((field, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center gap-3 bg-[#070814]/30 border border-brand-border/40 p-3 rounded-2xl animate-slide-down flex-wrap sm:flex-nowrap"
-                      >
-                        {/* Colleague Select Dropdown */}
-                        <div className="flex-1 min-w-[200px] space-y-1">
-                          <div className="relative">
-                            <select
-                              required
-                              disabled={isPending}
-                              value={field.toAgentId}
-                              onChange={(e) => updateTransferRow(idx, "toAgentId", e.target.value)}
-                              className="w-full bg-[#070814] border border-brand-border rounded-xl px-4 py-3.5 text-xs text-white focus:outline-none focus:border-brand-accent transition-all cursor-pointer appearance-none pr-10"
-                            >
-                              <option value="">اختر الموظف...</option>
-                              {colleagues.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                  {c.full_name} ({c.role === "senioragent" ? "Senior Agent" : "موظف"})
-                                </option>
-                              ))}
-                            </select>
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
-                              <User size={14} />
-                            </span>
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
-                              <ChevronDown size={14} />
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Amount Input */}
-                        <div className="w-full sm:w-44 space-y-1">
-                          <div className="relative">
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0.01"
-                              required
-                              disabled={isPending}
-                              placeholder="مبلغ التحويل"
-                              value={field.amount}
-                              onChange={(e) => updateTransferRow(idx, "amount", e.target.value)}
-                              className="w-full bg-[#070814] border border-brand-border rounded-xl pl-4 pr-9 py-3.5 text-xs text-white focus:outline-none focus:border-brand-accent transition-all text-left dir-ltr font-inter"
-                            />
-                            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none font-bold text-xs select-none">
-                              $
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Delete Row Button */}
-                        <button
-                          type="button"
-                          onClick={() => removeTransferRow(idx)}
-                          disabled={isPending}
-                          className="w-10 h-10 flex items-center justify-center bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/25 hover:text-white rounded-xl transition-all cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
-                          title="حذف البند"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
 
               {/* Closing password confirmation section */}
               <div className="border-t border-brand-border/20 pt-6 mt-8 space-y-4">

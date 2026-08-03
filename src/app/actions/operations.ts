@@ -490,6 +490,27 @@ export async function submitDailyExpenses(input: DailyExpensesInput, passwordCon
 
         return { success: false, error: `فشل تسجيل تحويلات العهدة: ${transfersInsertError.message}` };
       }
+
+      // Send notifications to each receiving agent
+      try {
+        const { data: senderProfile } = await supabaseAdmin
+          .from("profiles")
+          .select("full_name")
+          .eq("id", user.id)
+          .single();
+
+        const senderName = senderProfile?.full_name || "زميلك";
+
+        for (const t of transfers) {
+          if (t.toAgentId && t.amount > 0) {
+            const title = "تحويل عهدة وارد جديد";
+            const message = `قام الموظف (${senderName}) بتحويل مبلغ (${t.amount.toLocaleString("en-US")} ج.م) إلى حساب العهدة الخاص بك.`;
+            await createNotification(t.toAgentId, title, message);
+          }
+        }
+      } catch (notifErr) {
+        console.error("Error sending custody transfer notifications:", notifErr);
+      }
     }
 
     revalidatePath("/dashboard/operations");
@@ -1135,5 +1156,99 @@ export async function getLatestWalletsBalancesSnapshot(beforeDate?: string) {
   } catch (err: any) {
     console.error("getLatestWalletsBalancesSnapshot unexpected error:", err);
     return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Action: Get custody transfers sent to or received by the logged-in agent with filters & pagination
+ */
+export async function getAgentCustodyTransfersPaginated(params: {
+  page: number;
+  limit: number;
+  startDate?: string;
+  endDate?: string;
+  transferType?: "all" | "incoming" | "outgoing";
+}) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "غير مصرح بالعملية", data: [], totalCount: 0 };
+
+    let query = supabaseAdmin
+      .from("expense_transfers")
+      .select("*", { count: "exact" });
+
+    if (params.transferType === "incoming") {
+      query = query.eq("to_agent_id", user.id);
+    } else if (params.transferType === "outgoing") {
+      query = query.eq("from_agent_id", user.id);
+    } else {
+      query = query.or(`from_agent_id.eq.${user.id},to_agent_id.eq.${user.id}`);
+    }
+
+    if (params.startDate) {
+      query = query.gte("created_at", `${params.startDate}T00:00:00`);
+    }
+    if (params.endDate) {
+      query = query.lte("created_at", `${params.endDate}T23:59:59`);
+    }
+
+    const { data: rawTransfers, count, error } = await query
+      .order("created_at", { ascending: false })
+      .range((params.page - 1) * params.limit, params.page * params.limit - 1);
+
+    if (error) {
+      console.error("getAgentCustodyTransfersPaginated query error:", error);
+      return { success: false, error: error.message, data: [], totalCount: 0 };
+    }
+
+    if (!rawTransfers || rawTransfers.length === 0) {
+      return { success: true, data: [], totalCount: 0 };
+    }
+
+    // Collect all involved agent IDs to fetch their full names
+    const agentIds = Array.from(
+      new Set(
+        rawTransfers.flatMap((t: any) => [t.from_agent_id, t.to_agent_id]).filter(Boolean)
+      )
+    );
+
+    const { data: profiles } = await supabaseAdmin
+      .from("profiles")
+      .select("id, full_name, role")
+      .in("id", agentIds);
+
+    const profilesMap = new Map<string, { full_name: string; role: string }>();
+    (profiles || []).forEach((p) => {
+      profilesMap.set(p.id, { full_name: p.full_name, role: p.role });
+    });
+
+    const formattedData = rawTransfers.map((t: any) => {
+      const fromProfile = profilesMap.get(t.from_agent_id);
+      const toProfile = profilesMap.get(t.to_agent_id);
+      const isIncoming = t.to_agent_id === user.id;
+
+      return {
+        id: t.id,
+        expense_id: t.expense_id,
+        from_agent_id: t.from_agent_id,
+        to_agent_id: t.to_agent_id,
+        amount: Number(t.amount) || 0,
+        created_at: t.created_at,
+        is_incoming: isIncoming,
+        from_agent: {
+          full_name: fromProfile?.full_name || "موظف",
+          role: fromProfile?.role || "agent",
+        },
+        to_agent: {
+          full_name: toProfile?.full_name || "موظف",
+          role: toProfile?.role || "agent",
+        },
+      };
+    });
+
+    return { success: true, data: formattedData, totalCount: count || 0 };
+  } catch (err: any) {
+    console.error("getAgentCustodyTransfersPaginated unexpected error:", err);
+    return { success: false, error: err.message, data: [], totalCount: 0 };
   }
 }

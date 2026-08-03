@@ -6,6 +6,7 @@ import {
   getAdminFundRequestsPaginated,
   getAdminDailyExpensesPaginated,
   getAdminEditRequestsPaginated,
+  getAdminCustodyTransfersPaginated,
 } from "@/app/actions/adminOperations";
 import HistoryClient from "./HistoryClient";
 
@@ -38,6 +39,7 @@ export default async function HistoryManagementPage() {
   const fundRes = await getAdminFundRequestsPaginated({ page: 1, limit: 20 });
   const expenseRes = await getAdminDailyExpensesPaginated({ page: 1, limit: 20 });
   const editRes = await getAdminEditRequestsPaginated({ page: 1, limit: 20 });
+  const transferRes = await getAdminCustodyTransfersPaginated({ page: 1, limit: 20 });
 
   // 4. Fetch all active employees (agents/senior agents) for filters
   const { data: employees } = await supabaseAdmin
@@ -55,6 +57,8 @@ export default async function HistoryManagementPage() {
       initialExpenseCount={expenseRes.success && expenseRes.totalCount !== undefined ? expenseRes.totalCount : 0}
       initialEditRequests={editRes.success && editRes.data ? editRes.data : []}
       initialEditCount={editRes.success && editRes.totalCount !== undefined ? editRes.totalCount : 0}
+      initialCustodyTransfers={transferRes.success && transferRes.data ? transferRes.data : []}
+      initialTransferCount={transferRes.success && transferRes.totalCount !== undefined ? transferRes.totalCount : 0}
       employees={employees || []}
     />
   );

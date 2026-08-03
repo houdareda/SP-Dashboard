@@ -15,6 +15,9 @@ import {
   Megaphone,
   X,
   Loader2,
+  ArrowRightLeft,
+  ArrowDownLeft,
+  ArrowUpRight,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import {
@@ -23,6 +26,7 @@ import {
   getAgentEditRequestsPaginated,
   getAgentWalletsWithBalances,
   getExpenseTransfers,
+  getAgentCustodyTransfersPaginated,
 } from "@/app/actions/operations";
 
 interface LogsClientProps {
@@ -32,9 +36,11 @@ interface LogsClientProps {
   initialExpenseCount: number;
   initialEditRequests: any[];
   initialEditCount: number;
+  initialCustodyTransfers?: any[];
+  initialTransferCount?: number;
 }
 
-type TabType = "fund-requests" | "daily-expenses" | "edit-requests";
+type TabType = "fund-requests" | "daily-expenses" | "edit-requests" | "custody-transfers";
 
 export default function LogsClient({
   initialFundRequests = [],
@@ -43,6 +49,8 @@ export default function LogsClient({
   initialExpenseCount = 0,
   initialEditRequests = [],
   initialEditCount = 0,
+  initialCustodyTransfers = [],
+  initialTransferCount = 0,
 }: LogsClientProps) {
   const [activeTab, setActiveTab] = useState<TabType>("fund-requests");
 
@@ -58,6 +66,11 @@ export default function LogsClient({
   const [editRequests, setEditRequests] = useState<any[]>(initialEditRequests);
   const [editCount, setEditCount] = useState<number>(initialEditCount);
   const [editPage, setEditPage] = useState<number>(1);
+
+  const [custodyTransfers, setCustodyTransfers] = useState<any[]>(initialCustodyTransfers);
+  const [transferCount, setTransferCount] = useState<number>(initialTransferCount);
+  const [transferPage, setTransferPage] = useState<number>(1);
+  const [transferTypeFilter, setTransferTypeFilter] = useState<"all" | "incoming" | "outgoing">("all");
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
@@ -101,6 +114,12 @@ export default function LogsClient({
     setEditPage(1);
   }, [initialEditRequests, initialEditCount]);
 
+  useEffect(() => {
+    setCustodyTransfers(initialCustodyTransfers || []);
+    setTransferCount(initialTransferCount || 0);
+    setTransferPage(1);
+  }, [initialCustodyTransfers, initialTransferCount]);
+
   // Filters State
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
@@ -128,6 +147,7 @@ export default function LogsClient({
   const isFirstFundFetch = useRef(true);
   const isFirstExpenseFetch = useRef(true);
   const isFirstEditFetch = useRef(true);
+  const isFirstTransferFetch = useRef(true);
 
   // Fetch paginated & filtered Fund Requests
   useEffect(() => {
@@ -218,6 +238,36 @@ export default function LogsClient({
       isCurrent = false;
     };
   }, [editPage, startDate, endDate, selectedStatus, editRefresh]);
+
+  // Fetch paginated & filtered Custody Transfers
+  useEffect(() => {
+    if (isFirstTransferFetch.current) {
+      isFirstTransferFetch.current = false;
+      return;
+    }
+    let isCurrent = true;
+    async function fetchTransfers() {
+      setIsLoading(true);
+      const res = await getAgentCustodyTransfersPaginated({
+        page: transferPage,
+        limit: 20,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        transferType: transferTypeFilter,
+      });
+      if (isCurrent) {
+        if (res.success && res.data) {
+          setCustodyTransfers(res.data);
+          setTransferCount(res.totalCount);
+        }
+        setIsLoading(false);
+      }
+    }
+    fetchTransfers();
+    return () => {
+      isCurrent = false;
+    };
+  }, [transferPage, startDate, endDate, transferTypeFilter, expenseRefresh]);
 
   // Reset page parameters to 1 when filters are changed
   useEffect(() => {
@@ -645,6 +695,20 @@ export default function LogsClient({
           <FileEdit size={16} />
           <span>طلبات التعديل</span>
         </button>
+        <button
+          onClick={() => {
+            setActiveTab("custody-transfers");
+            setSelectedStatus("all");
+          }}
+          className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all duration-300 cursor-pointer shrink-0 ${
+            activeTab === "custody-transfers"
+              ? "border-brand-accent text-white"
+              : "border-transparent text-white/50 hover:text-white/80"
+          }`}
+        >
+          <ArrowRightLeft size={16} />
+          <span>تحويلات العهدة (الواردة والصادرة)</span>
+        </button>
       </div>
 
       {/* Tab Panels */}
@@ -906,6 +970,118 @@ export default function LogsClient({
                 </table>
                 {renderPaginationControls(editPage, editCount, Math.ceil(editCount / 20), setEditPage)}
               </div>
+            )}
+          </div>
+        )}
+
+        {/* 4. Custody Transfers Tab Content */}
+        {activeTab === "custody-transfers" && (
+          <div className="space-y-4 animate-fade-in">
+            {/* Filter controls for custody transfers */}
+            <div className="flex items-center gap-2 mb-4 bg-[#070912] p-1.5 rounded-xl border border-brand-border/40 w-fit select-none">
+              {[
+                { id: "all", label: "جميع التحويلات" },
+                { id: "incoming", label: "تحويلات واردة إليّ" },
+                { id: "outgoing", label: "تحويلات صادرة مني" },
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    setTransferTypeFilter(t.id as any);
+                    setTransferPage(1);
+                  }}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    transferTypeFilter === t.id
+                      ? "bg-brand-accent text-white shadow-md"
+                      : "text-brand-dim/70 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {custodyTransfers.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {custodyTransfers.map((item: any) => {
+                  const isIncoming = item.is_incoming;
+                  return (
+                    <div
+                      key={item.id}
+                      className={`bg-[#0c0f1d] border p-5 rounded-2xl transition-all relative overflow-hidden flex flex-col justify-between gap-4 ${
+                        isIncoming
+                          ? "border-emerald-500/35 hover:border-emerald-500/55 bg-gradient-to-r from-emerald-500/10 via-transparent to-transparent"
+                          : "border-brand-accent/35 hover:border-brand-accent/55 bg-gradient-to-r from-brand-accent/10 via-transparent to-transparent"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        {/* Type & Amount */}
+                        <div className="space-y-1 text-right">
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-full border ${
+                              isIncoming
+                                ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                                : "bg-brand-accent/15 text-brand-accent border-brand-accent/30"
+                            }`}
+                          >
+                            {isIncoming ? (
+                              <>
+                                <ArrowDownLeft size={13} />
+                                <span>تحويل وارد إليك</span>
+                              </>
+                            ) : (
+                              <>
+                                <ArrowUpRight size={13} />
+                                <span>تحويل صادر لزميل</span>
+                              </>
+                            )}
+                          </span>
+                          <div className="pt-2">
+                            <span className="text-xs text-brand-dim block font-medium">المبلغ المحول:</span>
+                            <span className="text-xl font-extrabold text-white font-inter">
+                              {item.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })} <span className="text-xs font-cairo text-brand-accent">ج.م</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Sender & Receiver details */}
+                        <div className="text-right space-y-1.5">
+                          <div className="text-xs">
+                            <span className="text-brand-dim/60 block font-medium">المُحوِّـل (من الموظف):</span>
+                            <span className="text-sm font-bold text-white font-cairo">
+                              {item.from_agent?.full_name || "موظف"}
+                            </span>
+                          </div>
+                          <div className="text-xs border-t border-brand-border/20 pt-1.5">
+                            <span className="text-brand-dim/60 block font-medium">المستلم (إلى الموظف):</span>
+                            <span className="text-sm font-bold text-white font-cairo">
+                              {item.to_agent?.full_name || "موظف"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Footer: Date & Time */}
+                      <div className="border-t border-brand-border/20 pt-3 flex items-center justify-between text-[11px] text-brand-dim/60">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar size={13} className="text-brand-accent/70" />
+                          <span>{formatDateTime(item.created_at)}</span>
+                        </div>
+                        <span className="font-mono text-[10px] opacity-40">#{item.id.slice(0, 8)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              renderEmptyState("لا توجد سجلات تحويلات عهدة مطابقة للبحث", ArrowRightLeft)
+            )}
+
+            {renderPaginationControls(
+              transferPage,
+              transferCount,
+              Math.ceil(transferCount / 20),
+              setTransferPage
             )}
           </div>
         )}

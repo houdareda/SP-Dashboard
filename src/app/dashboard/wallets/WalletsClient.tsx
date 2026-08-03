@@ -20,13 +20,17 @@ import {
   AlertCircle,
   BarChart3,
   X,
+  FileText,
+  StickyNote,
 } from "lucide-react";
 
 interface WalletsClientProps {
   initialWallets: WalletData[];
+  userRole?: string;
 }
 
-export default function WalletsClient({ initialWallets }: WalletsClientProps) {
+export default function WalletsClient({ initialWallets, userRole }: WalletsClientProps) {
+  const isAgentOrSenior = !userRole || userRole === "agent" || userRole === "senioragent";
   const router = useRouter();
   const [wallets, setWallets] = useState<WalletData[]>(initialWallets);
   const [isPending, startTransition] = useTransition();
@@ -45,12 +49,14 @@ export default function WalletsClient({ initialWallets }: WalletsClientProps) {
   const [phone, setPhone] = useState("");
   const [balance, setBalance] = useState("");
   const [esimNumber, setEsimNumber] = useState("");
+  const [notes, setNotes] = useState("");
 
   // Edit modal states
   const [editingWallet, setEditingWallet] = useState<WalletData | null>(null);
   const [editPhone, setEditPhone] = useState("");
   const [editBalance, setEditBalance] = useState("");
   const [editEsim, setEditEsim] = useState("");
+  const [editNotes, setEditNotes] = useState("");
 
   // Sync state with initialWallets on page refreshes
   React.useEffect(() => {
@@ -162,13 +168,19 @@ export default function WalletsClient({ initialWallets }: WalletsClientProps) {
     }
 
     startTransition(async () => {
-      const res = await addWallet(phone.trim(), initialBalanceVal, esimNumber.trim() || undefined);
+      const res = await addWallet(
+        phone.trim(),
+        initialBalanceVal,
+        esimNumber.trim() || undefined,
+        notes.trim() || undefined
+      );
 
       if (res.success && res.wallet) {
         showToast("تم إضافة المحفظة بنجاح.", "success");
         setPhone("");
         setBalance("");
         setEsimNumber("");
+        setNotes("");
         // Optimistically add to list
         setWallets((prev) => [res.wallet!, ...prev]);
         router.refresh();
@@ -184,6 +196,7 @@ export default function WalletsClient({ initialWallets }: WalletsClientProps) {
     setEditPhone(wallet.phone_number);
     setEditBalance(String(wallet.start_of_month_balance));
     setEditEsim(wallet.esim_number || "");
+    setEditNotes(wallet.notes || "");
   };
 
   // Handle Edit Wallet Submit
@@ -191,29 +204,34 @@ export default function WalletsClient({ initialWallets }: WalletsClientProps) {
     e.preventDefault();
     if (!editingWallet) return;
 
-    if (!editPhone || editPhone.trim() === "") {
-      showToast("يرجى إدخال رقم الهاتف للمحفظة.", "error");
-      return;
-    }
+    if (!isAgentOrSenior) {
+      if (!editPhone || editPhone.trim() === "") {
+        showToast("يرجى إدخال رقم الهاتف للمحفظة.", "error");
+        return;
+      }
 
-    const phoneRegex = /^01[0125][0-9]{8}$/;
-    if (!phoneRegex.test(editPhone.trim())) {
-      showToast("يرجى إدخال رقم هاتف مصري صحيح (11 رقم)", "error");
-      return;
+      const phoneRegex = /^01[0125][0-9]{8}$/;
+      if (!phoneRegex.test(editPhone.trim())) {
+        showToast("يرجى إدخال رقم هاتف مصري صحيح (11 رقم)", "error");
+        return;
+      }
+
+      const balanceValCheck = parseFloat(editBalance);
+      if (isNaN(balanceValCheck) || balanceValCheck < 0) {
+        showToast("يرجى إدخال رصيد أول الشهر صحيح.", "error");
+        return;
+      }
     }
 
     const balanceVal = parseFloat(editBalance);
-    if (isNaN(balanceVal) || balanceVal < 0) {
-      showToast("يرجى إدخال رصيد أول الشهر صحيح.", "error");
-      return;
-    }
 
     startTransition(async () => {
       const res = await editWallet(
         editingWallet.id,
         editPhone.trim(),
-        balanceVal,
-        editEsim.trim() || undefined
+        isNaN(balanceVal) ? editingWallet.start_of_month_balance : balanceVal,
+        editEsim.trim() || undefined,
+        editNotes.trim() || undefined
       );
 
       if (res.success && res.wallet) {
@@ -362,6 +380,14 @@ export default function WalletsClient({ initialWallets }: WalletsClientProps) {
                     </span>
                     <span>الشريحة: {wallet.esim_number}</span>
                   </span>
+                </div>
+              )}
+              {wallet.notes && (
+                <div className="text-right mt-2.5 bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-amber-500/5 border border-amber-500/35 rounded-xl p-2.5 text-xs text-amber-200/90 shadow-[0_0_12px_rgba(245,158,11,0.1)] relative overflow-hidden flex items-start gap-2">
+                  <StickyNote size={14} className="text-amber-400 shrink-0 mt-0.5" />
+                  <p className="leading-relaxed text-amber-100 font-medium font-cairo whitespace-pre-line select-text text-xs">
+                    {wallet.notes}
+                  </p>
                 </div>
               )}
             </div>
@@ -663,6 +689,28 @@ export default function WalletsClient({ initialWallets }: WalletsClientProps) {
                 </div>
               </div>
 
+              {/* Notes Input */}
+              <div className="space-y-2">
+                <label htmlFor="walletNotes" className="block text-sm font-bold text-white/90 mb-1">
+                  ملاحظات
+                </label>
+                <div className="relative">
+                  <textarea
+                    id="walletNotes"
+                    rows={2}
+                    disabled={isPending}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="ملاحظات المحفظة (مثال: تاريخ آخر شحن...)"
+                    autoComplete="off"
+                    className="w-full bg-[#070814] border border-brand-border rounded-xl pl-4 pr-11 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-right font-cairo resize-none"
+                  />
+                  <span className="absolute right-3.5 top-3 text-white/30">
+                    <FileText size={16} />
+                  </span>
+                </div>
+              </div>
+
               {/* Submit Button */}
               <button
                 type="submit"
@@ -779,7 +827,11 @@ export default function WalletsClient({ initialWallets }: WalletsClientProps) {
                 <Pencil size={18} className="text-brand-accent" />
                 <span>تعديل بيانات المحفظة</span>
               </h3>
-              <p className="text-xs text-brand-dim mt-1">تحديث رقم الهاتف، رصيد أول الشهر، ورقم الشريحة الإلكترونية.</p>
+              <p className="text-xs text-brand-dim mt-1">
+                {isAgentOrSenior
+                  ? "تحديث رقم الشريحة الإلكترونية."
+                  : "تحديث رقم الهاتف، رصيد أول الشهر، ورقم الشريحة الإلكترونية."}
+              </p>
             </div>
 
             {/* Form */}
@@ -787,17 +839,18 @@ export default function WalletsClient({ initialWallets }: WalletsClientProps) {
               {/* Phone Input */}
               <div className="space-y-1.5">
                 <label htmlFor="editPhone" className="block text-xs font-semibold text-brand-dim">
-                  رقم الهاتف للمحفظة
+                  رقم الهاتف للمحفظة {isAgentOrSenior && <span className="text-[10px] text-amber-400/80 mr-1">(غير قابل للتعديل)</span>}
                 </label>
                 <div className="relative">
                   <input
                     id="editPhone"
                     type="text"
                     required
+                    disabled={isAgentOrSenior || isPending}
                     value={editPhone}
                     onChange={(e) => setEditPhone(e.target.value)}
                     placeholder="01xxxxxxxxx"
-                    className="w-full bg-[#070814] border border-brand-border rounded-xl pl-4 pr-11 py-3 text-sm text-white focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow text-left dir-ltr font-inter"
+                    className="w-full bg-[#070814] border border-brand-border rounded-xl pl-4 pr-11 py-3 text-sm text-white focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow text-left dir-ltr font-inter disabled:opacity-50 disabled:bg-white/[0.02] disabled:cursor-not-allowed"
                   />
                   <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30">
                     <Phone size={16} />
@@ -808,7 +861,7 @@ export default function WalletsClient({ initialWallets }: WalletsClientProps) {
               {/* Start of Month Balance Input */}
               <div className="space-y-1.5">
                 <label htmlFor="editBalance" className="block text-xs font-semibold text-brand-dim">
-                  رصيد أول الشهر للمحفظة (ج.م)
+                  رصيد أول الشهر للمحفظة (ج.م) {isAgentOrSenior && <span className="text-[10px] text-amber-400/80 mr-1">(غير قابل للتعديل)</span>}
                 </label>
                 <div className="relative">
                   <input
@@ -817,10 +870,11 @@ export default function WalletsClient({ initialWallets }: WalletsClientProps) {
                     step="0.01"
                     min="0"
                     required
+                    disabled={isAgentOrSenior || isPending}
                     value={editBalance}
                     onChange={(e) => setEditBalance(e.target.value)}
                     placeholder="0.00"
-                    className="w-full bg-[#070814] border border-brand-border rounded-xl pl-4 pr-11 py-3 text-sm text-white focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow text-left dir-ltr font-inter"
+                    className="w-full bg-[#070814] border border-brand-border rounded-xl pl-4 pr-11 py-3 text-sm text-white focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow text-left dir-ltr font-inter disabled:opacity-50 disabled:bg-white/[0.02] disabled:cursor-not-allowed"
                   />
                   <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30">
                     <Coins size={16} />
@@ -844,6 +898,27 @@ export default function WalletsClient({ initialWallets }: WalletsClientProps) {
                   />
                   <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30">
                     <Smartphone size={16} />
+                  </span>
+                </div>
+              </div>
+
+              {/* Notes Input */}
+              <div className="space-y-1.5">
+                <label htmlFor="editNotes" className="block text-xs font-semibold text-brand-dim">
+                  ملاحظات
+                </label>
+                <div className="relative">
+                  <textarea
+                    id="editNotes"
+                    rows={2}
+                    disabled={isPending}
+                    value={editNotes}
+                    onChange={(e) => setEditNotes(e.target.value)}
+                    placeholder="أضف أي ملاحظات تود حفظها للمحفظة..."
+                    className="w-full bg-[#070814] border border-brand-border rounded-xl pl-4 pr-11 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow text-right font-cairo resize-none"
+                  />
+                  <span className="absolute right-3.5 top-3 text-white/30">
+                    <FileText size={16} />
                   </span>
                 </div>
               </div>
