@@ -83,7 +83,7 @@ export default function WalletsClient({ initialWallets, userRole }: WalletsClien
           ) {
             const amount = Number(payload.new.amount_approved) || 0;
             showToast(
-              `تم اعتماد شحن رصيد بمبلغ ${amount.toLocaleString("en-US")} ج.م وتحديث المحفظة!`,
+              `تم اعتماد شحن رصيد بمبلغ ${amount.toLocaleString("en-US")} وتحديث المحفظة!`,
               "success"
             );
           }
@@ -426,8 +426,7 @@ export default function WalletsClient({ initialWallets, userRole }: WalletsClien
             {wallet.start_of_month_balance.toLocaleString("en-US", {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
-            })}{" "}
-            <span className="text-[10px] text-brand-dim font-cairo font-normal">ج.م</span>
+            })}
           </span>
         </div>
 
@@ -443,15 +442,14 @@ export default function WalletsClient({ initialWallets, userRole }: WalletsClien
             {currentMonthTotal.toLocaleString("en-US", {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
-            })}{" "}
-            <span className="text-[10px] text-brand-dim font-cairo font-normal">ج.م</span>
+            })}
           </span>
         </div>
 
         {/* Progress Bar */}
         <div className="mt-3 space-y-1.5">
           <div className="flex items-center justify-between text-[10px] text-brand-dim/70">
-            <span>نسبة الامتلاء (من 200,000 ج.م)</span>
+            <span>نسبة الامتلاء (من 200,000)</span>
             <span className={`font-bold font-inter ${
               usagePercent >= 100 ? "text-red-400" : usagePercent >= 80 ? "text-amber-400" : "text-emerald-400"
             }`}>
@@ -486,8 +484,7 @@ export default function WalletsClient({ initialWallets, userRole }: WalletsClien
               {currentMonthTotal.toLocaleString("en-US", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
-              })}{" "}
-              ج.م
+              })}
             </span>
           </div>
 
@@ -645,7 +642,7 @@ export default function WalletsClient({ initialWallets, userRole }: WalletsClien
               {/* Balance Input */}
               <div className="space-y-2">
                 <label htmlFor="walletBalance" className="block text-sm font-bold text-white/90 mb-1">
-                  الرصيد الحالي للمحفظة (ج.م)
+                  الرصيد الحالي للمحفظة
                 </label>
                 <div className="relative">
                   <input
@@ -861,7 +858,7 @@ export default function WalletsClient({ initialWallets, userRole }: WalletsClien
               {/* Start of Month Balance Input */}
               <div className="space-y-1.5">
                 <label htmlFor="editBalance" className="block text-xs font-semibold text-brand-dim">
-                  رصيد أول الشهر للمحفظة (ج.م) {isAgentOrSenior && <span className="text-[10px] text-amber-400/80 mr-1">(غير قابل للتعديل)</span>}
+                  رصيد أول الشهر للمحفظة {isAgentOrSenior && <span className="text-[10px] text-amber-400/80 mr-1">(غير قابل للتعديل)</span>}
                 </label>
                 <div className="relative">
                   <input

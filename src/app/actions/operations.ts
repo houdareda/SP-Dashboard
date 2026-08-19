@@ -456,8 +456,6 @@ export async function submitDailyExpenses(input: DailyExpensesInput, passwordCon
         marketing_3: marketing3,
         personal_expense: personalExpense,
         total_cash: totalCash,
-        cash_after_expenses: cashAfterExpenses,
-        wallets_balances: walletsBalances,
       })
       .select("id")
       .single();
@@ -570,7 +568,6 @@ export async function getExpenseReportForDate(dateStr: string) {
         personalExpense: Number(expense.personal_expense) || 0,
         expenseDate: expense.expense_date,
         totalCash: Number(expense.total_cash) || 0,
-        cashAfterExpenses: Number(expense.cash_after_expenses) || 0,
         walletsBalances: expense.wallets_balances || [],
       },
       transfers: (transfers || []).map((t) => ({
@@ -710,8 +707,6 @@ export async function submitEditExpenseRequest(
         amount: t.amount,
       })),
       total_cash: requestedChanges.totalCash !== undefined ? requestedChanges.totalCash : Number(originalExpense.total_cash || 0),
-      cash_after_expenses: requestedChanges.cashAfterExpenses !== undefined ? requestedChanges.cashAfterExpenses : Number(originalExpense.cash_after_expenses || 0),
-      wallets_balances: requestedChanges.walletsBalances || originalExpense.wallets_balances || [],
     };
 
     // 3. Insert pending request
@@ -1131,31 +1126,16 @@ export async function getLatestWalletsBalancesSnapshot(beforeDate?: string) {
     const { data, error } = await query.limit(1).maybeSingle();
 
     if (error) {
-      console.error("Error fetching latest wallets snapshot:", error);
-      return { success: false, error: error.message };
+      return { success: true, walletsBalances: null };
     }
 
     if (!data || !data.wallets_balances) {
-      // If no record found before the date, try to find the absolute latest one
-      const { data: latestData, error: latestError } = await supabaseAdmin
-        .from("daily_expenses")
-        .select("wallets_balances, expense_date")
-        .eq("agent_id", user.id)
-        .order("expense_date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (!latestError && latestData && latestData.wallets_balances) {
-        return { success: true, walletsBalances: latestData.wallets_balances, date: latestData.expense_date };
-      }
-
       return { success: true, walletsBalances: null };
     }
 
     return { success: true, walletsBalances: data.wallets_balances, date: data.expense_date };
   } catch (err: any) {
-    console.error("getLatestWalletsBalancesSnapshot unexpected error:", err);
-    return { success: false, error: err.message };
+    return { success: true, walletsBalances: null };
   }
 }
 

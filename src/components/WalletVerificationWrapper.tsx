@@ -123,9 +123,6 @@ export default function WalletVerificationWrapper({
                     disabled={isLoading}
                     className="w-full h-11 px-4 rounded-xl bg-[#06070d] border border-brand-border/60 text-white placeholder-brand-dim/30 font-inter focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 text-left transition-all disabled:opacity-50"
                   />
-                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-brand-dim/50 pointer-events-none select-none">
-                    ج.م
-                  </span>
                 </div>
               </div>
             ))}

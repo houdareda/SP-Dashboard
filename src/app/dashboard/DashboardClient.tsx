@@ -13,6 +13,7 @@ import {
   Users,
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { useRouter } from "next/navigation";
 import { getDashboardOverview, DashboardOverviewData } from "@/app/actions/dashboard";
 
 const getAgentBadgeStyle = (name: string) => {
@@ -52,6 +53,7 @@ export default function DashboardClient({
   initialData,
   employeesList = [],
 }: DashboardClientProps) {
+  const router = useRouter();
   const [data, setData] = useState<DashboardOverviewData>(initialData);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
@@ -137,7 +139,7 @@ export default function DashboardClient({
 
   // Format Helper for Currency Egyptian Pound
   const formatCurrency = (val: number) => {
-    return `${val.toLocaleString("en-US")} ج.م`;
+    return val.toLocaleString("en-US");
   };
 
   // Dynamic Date string formatting for Card Subtitles
@@ -303,7 +305,7 @@ export default function DashboardClient({
         </div>
       )}
       {/* Main Grid for Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative min-h-[350px]">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative min-h-[350px]">
         {isLoading && (
           <div className="absolute inset-0 bg-[#0a0d16]/60 backdrop-blur-[1.5px] flex items-center justify-center rounded-[24px] z-50 transition-all duration-300">
             <div className="flex flex-col items-center gap-3">
@@ -331,7 +333,7 @@ export default function DashboardClient({
             </div>
             <h3 className="text-sm font-medium text-brand-dim">إجمالي المصروفات لهذا الشهر</h3>
             <p className="mt-2 text-2xl md:text-3xl font-extrabold text-white tracking-tight font-mono">
-              {metrics.monthlyExpenses.total.toLocaleString("en-US")} <span className="text-xs font-normal text-brand-dim font-sans">ج.م</span>
+              {metrics.monthlyExpenses.total.toLocaleString("en-US")}
             </p>
             <p className="mt-1 text-xs text-brand-dim/80">
               {role === "admin" || role === "senioragent"
@@ -341,23 +343,23 @@ export default function DashboardClient({
             <div className="my-5 border-t border-brand-border/60"></div>
             <div className="space-y-3">
               <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.01] border border-white/[0.03] hover:border-white/[0.08] transition-all">
-                <span className="text-sm font-bold text-white font-mono">{metrics.monthlyExpenses.personal.toLocaleString("en-US")} ج.م</span>
+                <span className="text-sm font-bold text-white font-mono">{metrics.monthlyExpenses.personal.toLocaleString("en-US")}</span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border text-blue-400 bg-blue-400/10 border-blue-500/20">مصروف شخصي</span>
               </div>
               <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.01] border border-white/[0.03] hover:border-white/[0.08] transition-all">
-                <span className="text-sm font-bold text-white font-mono">{metrics.monthlyExpenses.marketing1.toLocaleString("en-US")} ج.م</span>
+                <span className="text-sm font-bold text-white font-mono">{metrics.monthlyExpenses.marketing1.toLocaleString("en-US")}</span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border" style={{ color: "rgb(129, 140, 248)", borderColor: "rgba(129, 140, 248, 0.125)", backgroundColor: "rgba(129, 140, 248, 0.063)" }}>ماركتنج 1</span>
               </div>
               <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.01] border border-white/[0.03] hover:border-white/[0.08] transition-all">
-                <span className="text-sm font-bold text-white font-mono">{metrics.monthlyExpenses.marketing2.toLocaleString("en-US")} ج.م</span>
+                <span className="text-sm font-bold text-white font-mono">{metrics.monthlyExpenses.marketing2.toLocaleString("en-US")}</span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border" style={{ color: "rgb(74, 222, 128)", borderColor: "rgba(74, 222, 128, 0.125)", backgroundColor: "rgba(74, 222, 128, 0.063)" }}>ماركتنج 2</span>
               </div>
               <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.01] border border-white/[0.03] hover:border-white/[0.08] transition-all">
-                <span className="text-sm font-bold text-white font-mono">{metrics.monthlyExpenses.marketing3.toLocaleString("en-US")} ج.م</span>
+                <span className="text-sm font-bold text-white font-mono">{metrics.monthlyExpenses.marketing3.toLocaleString("en-US")}</span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border" style={{ color: "rgb(192, 132, 252)", borderColor: "rgba(192, 132, 252, 0.125)", backgroundColor: "rgba(192, 132, 252, 0.063)" }}>ماركتنج 3</span>
               </div>
               <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.01] border border-white/[0.03] hover:border-white/[0.08] transition-all">
-                <span className="text-sm font-bold text-white font-mono">{metrics.monthlyExpenses.transfersSent.toLocaleString("en-US")} ج.م</span>
+                <span className="text-sm font-bold text-white font-mono">{metrics.monthlyExpenses.transfersSent.toLocaleString("en-US")}</span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border text-pink-400 bg-pink-400/10 border-pink-500/20">تحويل عهدة لزميل</span>
               </div>
             </div>
@@ -381,7 +383,7 @@ export default function DashboardClient({
             </div>
             <h3 className="text-sm font-medium text-brand-dim">إجمالي العهدة الحالية</h3>
             <p className="mt-2 text-2xl md:text-3xl font-extrabold text-white tracking-tight font-mono">
-              {metrics.custody.total.toLocaleString("en-US")} <span className="text-xs font-normal text-brand-dim font-sans">ج.م</span>
+              {metrics.custody.total.toLocaleString("en-US")}
             </p>
             <p className="mt-1 text-xs text-brand-dim/80">
               {role === "admin" || role === "senioragent"
@@ -391,23 +393,19 @@ export default function DashboardClient({
             <div className="my-5 border-t border-brand-border/60"></div>
             <div className="space-y-2.5">
               <div className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-white/[0.01] border border-white/[0.03] hover:border-white/[0.08] transition-all">
-                <span className="text-xs font-bold text-emerald-400 font-mono">+{metrics.custody.approvedFunds.toLocaleString("en-US")} ج.م</span>
+                <span className="text-xs font-bold text-emerald-400 font-mono">+{metrics.custody.approvedFunds.toLocaleString("en-US")}</span>
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border border-emerald-500/20 bg-emerald-500/5 text-emerald-400">طلبات شحن مقبولة</span>
               </div>
               <div className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-white/[0.01] border border-white/[0.03] hover:border-white/[0.08] transition-all">
-                <span className="text-xs font-bold text-emerald-400 font-mono">+{metrics.custody.receivedCustody.toLocaleString("en-US")} ج.م</span>
+                <span className="text-xs font-bold text-emerald-400 font-mono">+{metrics.custody.receivedCustody.toLocaleString("en-US")}</span>
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border border-emerald-500/20 bg-emerald-500/5 text-emerald-400">عهد مستلمة من زملاء</span>
               </div>
               <div className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-white/[0.01] border border-white/[0.03] hover:border-white/[0.08] transition-all">
-                <span className="text-xs font-bold text-rose-400 font-mono">-{metrics.custody.expensesTotal.toLocaleString("en-US")} ج.م</span>
+                <span className="text-xs font-bold text-rose-400 font-mono">-{metrics.custody.expensesTotal.toLocaleString("en-US")}</span>
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border border-rose-500/20 bg-rose-500/5 text-rose-400">مصاريف شخصية وتسويق</span>
               </div>
               <div className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-white/[0.01] border border-white/[0.03] hover:border-white/[0.08] transition-all">
-                <span className="text-xs font-bold text-rose-400 font-mono">-{metrics.custody.sentCustody.toLocaleString("en-US")} ج.م</span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border border-rose-500/20 bg-rose-500/5 text-rose-400">عهد مرسلة لزملاء</span>
-              </div>
-              <div className="flex items-center justify-between py-1.5 px-3 rounded-xl bg-white/[0.01] border border-white/[0.03] hover:border-white/[0.08] transition-all">
-                <span className="text-xs font-bold text-amber-400 font-mono">{metrics.custody.pendingFunds.toLocaleString("en-US")} ج.م</span>
+                <span className="text-xs font-bold text-amber-400 font-mono">{metrics.custody.pendingFunds.toLocaleString("en-US")}</span>
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border border-amber-500/20 bg-amber-500/5 text-amber-400">
                   طلبات معلقة ({metrics.custody.pendingCount})
                 </span>
@@ -416,75 +414,12 @@ export default function DashboardClient({
           </div>
           <div className="mt-4 pt-3 border-t border-brand-border/40 text-center">
             <span className="text-[10px] text-brand-dim block font-mono">
-              (إجمالي المستلم: {metrics.custody.totalReceived.toLocaleString("en-US")} ج.م | إجمالي المنصرف: {metrics.custody.totalSpent.toLocaleString("en-US")} ج.م)
+              (إجمالي المستلم: {metrics.custody.totalReceived.toLocaleString("en-US")} | إجمالي المنصرف: {metrics.custody.totalSpent.toLocaleString("en-US")})
             </span>
           </div>
         </div>
-
-        {/* Card 3: Wallets Overview */}
-        <div className="group relative rounded-[24px] bg-brand-card border border-brand-border backdrop-blur-xl p-6 hover:border-brand-accent/30 transition-all duration-300 shadow-[0_4px_24px_rgba(0,0,0,0.3)] hover:shadow-[0_8px_32px_rgba(139,92,246,0.06)] overflow-hidden flex flex-col justify-between">
-          <div>
-            <div className="absolute -top-[100px] -left-[100px] w-[200px] h-[200px] bg-brand-accent/5 rounded-full blur-[50px] pointer-events-none"></div>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-brand-accent/10 border border-brand-border text-brand-accent group-hover:scale-105 transition-transform duration-300">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-wallet h-6 w-6" aria-hidden="true">
-                  <path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"></path>
-                  <path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"></path>
-                </svg>
-              </div>
-              <span className="text-xs font-semibold text-brand-dim">
-                {role === "admin" || role === "senioragent" ? "محافظ الكاش المجمعة لهذا الشهر" : "محافظ الكاش المجمعة"}
-              </span>
-            </div>
-            <h3 className="text-sm font-medium text-brand-dim">الكاش المجمع في المحافظ لهذا الشهر</h3>
-            <p className="mt-2 text-2xl md:text-3xl font-extrabold text-white tracking-tight font-mono">
-              {metrics.wallets.totalCash.toLocaleString("en-US")} <span className="text-xs font-normal text-brand-dim font-sans">ج.م</span>
-            </p>
-            <p className="mt-1 text-xs text-brand-dim/80">
-              {role === "admin" || role === "senioragent"
-                ? `موزعة على (${metrics.wallets.activeCount}) محافظ نشطة للموظفين المحددين خلال الشهر الحالي`
-                : `موزعة على (${metrics.wallets.activeCount}) محافظ نشطة خلال الشهر الحالي`}
-            </p>
-            <div className="my-5 border-t border-brand-border/60"></div>
-            <div className="space-y-2.5 max-h-[260px] overflow-y-auto pr-1 custom-scrollbar">
-              {metrics.wallets.list.map((wallet) => {
-                const badgeStyle = wallet.agentName ? getAgentBadgeStyle(wallet.agentName) : "";
-                return (
-                  <div
-                    key={wallet.id}
-                    className="flex items-center justify-between gap-2.5 py-1 px-3.5 rounded-xl bg-white/[0.01] border border-white/[0.03] hover:border-white/[0.06] transition-all duration-300"
-                  >
-                    <span className="text-xs font-extrabold text-white font-mono whitespace-nowrap">
-                      {wallet.balance.toLocaleString("en-US")} ج.م
-                    </span>
-                    <div className="flex items-center gap-2 text-right">
-                      {/* Smartphone SVG */}
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-smartphone h-3.5 w-3.5 text-brand-accent" aria-hidden="true">
-                        <rect width="14" height="20" x="5" y="2" rx="2" ry="2"></rect>
-                        <path d="M12 18h.01"></path>
-                      </svg>
-                      <span className="text-[17px] font-bold text-white font-mono tracking-wide">
-                        {wallet.phone_number}
-                      </span>
-                      {/* Owner Badge (Only displayed for Admin/Senior) */}
-                      {(role === "admin" || role === "senioragent") && wallet.agentName && (
-                        <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded-lg text-[9px] font-bold border whitespace-nowrap ${badgeStyle}`}>
-                          {wallet.agentName}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-              {metrics.wallets.list.length === 0 && (
-                <div className="text-center py-10 text-xs text-brand-dim/30">
-                  لا توجد محافظ نشطة للموظف المحدد حالياً.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
       </div>
+
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         

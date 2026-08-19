@@ -161,6 +161,18 @@ export default function Sidebar({
       allowedRoles: ["agent", "senioragent"],
     },
     {
+      name: "أداة حساب المصاريف والـ CPL",
+      path: "/dashboard/cpl-calculator",
+      icon: Calculator,
+      allowedRoles: ["agent", "senioragent"],
+    },
+    {
+      name: "سجل أداة CPL",
+      path: "/dashboard/cpl-calculator/logs",
+      icon: History,
+      allowedRoles: ["admin", "agent", "senioragent"],
+    },
+    {
       name: "طلبات الأموال",
       path: "/dashboard/admin/fund-requests",
       icon: Coins,

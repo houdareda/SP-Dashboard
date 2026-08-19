@@ -168,7 +168,7 @@ export default function AgentsCustodyClient({
           </div>
           <h3 className="text-xs font-semibold text-brand-dim">إجمالي العهد المجمعة للموظفين</h3>
           <p className="mt-2 text-2xl font-extrabold text-white font-mono tracking-wide">
-            {summary.totalCurrentCustody.toLocaleString("en-US")} <span className="text-[11px] font-normal text-brand-dim font-sans">ج.م</span>
+            {summary.totalCurrentCustody.toLocaleString("en-US")}
           </p>
           <p className="mt-1 text-[10px] text-brand-dim/80">إجمالي المبالغ النقدية المتبقية عهدة مع الموظفين حالياً.</p>
         </div>
@@ -183,7 +183,7 @@ export default function AgentsCustodyClient({
           </div>
           <h3 className="text-xs font-semibold text-brand-dim">إجمالي شحن العهد للفترة</h3>
           <p className="mt-2 text-2xl font-extrabold text-white font-mono tracking-wide">
-            {summary.totalApprovedFundsInPeriod.toLocaleString("en-US")} <span className="text-[11px] font-normal text-brand-dim font-sans">ج.م</span>
+            {summary.totalApprovedFundsInPeriod.toLocaleString("en-US")}
           </p>
           <p className="mt-1 text-[10px] text-brand-dim/80">مجموع المبالغ المعتمد شحنها للمحافظ خلال الفترة المحددة.</p>
         </div>
@@ -198,7 +198,7 @@ export default function AgentsCustodyClient({
           </div>
           <h3 className="text-xs font-semibold text-brand-dim">إجمالي المصاريف للفترة</h3>
           <p className="mt-2 text-2xl font-extrabold text-white font-mono tracking-wide">
-            {summary.totalExpensesInPeriod.toLocaleString("en-US")} <span className="text-[11px] font-normal text-brand-dim font-sans">ج.م</span>
+            {summary.totalExpensesInPeriod.toLocaleString("en-US")}
           </p>
           <p className="mt-1 text-[10px] text-brand-dim/80">مجموع تقارير مصاريف الموظفين المقبولة في الفترة المحددة.</p>
         </div>
@@ -530,14 +530,14 @@ export default function AgentsCustodyClient({
                           <span className={`font-bold font-mono text-sm tracking-wide ${
                             agent.currentCustody >= 0 ? "text-emerald-400" : "text-red-400"
                           }`}>
-                            {agent.currentCustody.toLocaleString("en-US")} ج.م
+                            {agent.currentCustody.toLocaleString("en-US")}
                           </span>
                         </td>
 
                         {/* Approved charging sum in period */}
                         <td className="py-4.5 px-6 text-center font-bold font-mono text-white/95 tracking-wide">
                           {agent.approvedFundsInPeriod > 0 ? (
-                            <span className="text-brand-accent">+{agent.approvedFundsInPeriod.toLocaleString("en-US")} ج.م</span>
+                            <span className="text-brand-accent">+{agent.approvedFundsInPeriod.toLocaleString("en-US")}</span>
                           ) : (
                             <span className="text-white/40">-</span>
                           )}
@@ -546,7 +546,7 @@ export default function AgentsCustodyClient({
                         {/* Expense sum in period */}
                         <td className="py-4.5 px-6 text-center font-bold font-mono text-white/95 tracking-wide">
                           {agent.expensesInPeriod > 0 ? (
-                            <span className="text-rose-400">-{agent.expensesInPeriod.toLocaleString("en-US")} ج.m</span>
+                            <span className="text-rose-400">-{agent.expensesInPeriod.toLocaleString("en-US")}</span>
                           ) : (
                             <span className="text-white/40">-</span>
                           )}
@@ -585,14 +585,14 @@ export default function AgentsCustodyClient({
                                             <span className="inline-flex items-center px-1.5 py-0.5 text-[8.5px] font-bold text-white/30 bg-white/5 border border-white/10 rounded-md select-none">غير نشطة</span>
                                           )}
                                         </div>
-                                        <p className="text-[9.5px] text-brand-dim/60 leading-none">شحن للفترة: <span className="font-bold font-mono text-white/80">{wallet.approvedFundsInPeriod.toLocaleString("en-US")} ج.م</span></p>
+                                        <p className="text-[9.5px] text-brand-dim/60 leading-none">شحن للفترة: <span className="font-bold font-mono text-white/80">{wallet.approvedFundsInPeriod.toLocaleString("en-US")}</span></p>
                                       </div>
 
                                       {/* Right: monthly balance */}
                                       <div className="text-left">
                                         <p className="text-[10px] text-brand-dim leading-none mb-1 font-semibold">الرصيد المحسوب (هذا الشهر)</p>
                                         <p className="font-bold font-mono text-brand-accent text-sm tracking-wide leading-none">
-                                          {wallet.calculatedBalance.toLocaleString("en-US")} ج.م
+                                          {wallet.calculatedBalance.toLocaleString("en-US")}
                                         </p>
                                       </div>
                                     </div>

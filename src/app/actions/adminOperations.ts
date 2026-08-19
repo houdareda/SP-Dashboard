@@ -686,8 +686,6 @@ export async function reviewEditRequest(
           marketing_3: Number(newChanges.marketing_3) || 0,
           personal_expense: Number(newChanges.personal_expense) || 0,
           total_cash: Number(newChanges.total_cash) || 0,
-          cash_after_expenses: Number(newChanges.cash_after_expenses) || 0,
-          wallets_balances: newChanges.wallets_balances || [],
         })
         .eq("id", expenseId);
 
@@ -882,13 +880,13 @@ export async function getManagementHistory() {
       .select(`
         *,
         agent:profiles!edit_expense_requests_agent_id_fkey(id, full_name),
-        expense:daily_expenses(id, agent_id, expense_date, personal_expense, marketing_1, marketing_2, marketing_3, total_amount, total_cash, cash_after_expenses, wallets_balances),
+        expense:daily_expenses(*),
         reviewer:profiles!edit_expense_requests_reviewed_by_fkey(full_name)
       `)
       .order("created_at", { ascending: false });
 
     if (editError) {
-      console.error("getManagementHistory edit_expense_requests error:", editError);
+      console.error("getManagementHistory edit_expense_requests error:", editError?.message || editError?.details || editError);
     }
 
     // 5. Fetch active employees (agents and senior agents)
@@ -1042,7 +1040,6 @@ export async function getAdminDailyExpensesPaginated(params: {
       marketing_3: exp.marketing_3,
       personal_expense: exp.personal_expense,
       total_cash: exp.total_cash,
-      cash_after_expenses: exp.cash_after_expenses,
       wallets_balances: exp.wallets_balances,
       agent: exp.agent,
     }));
@@ -1084,7 +1081,7 @@ export async function getAdminEditRequestsPaginated(params: {
       .select(`
         *,
         agent:profiles!edit_expense_requests_agent_id_fkey(id, full_name),
-        expense:daily_expenses(id, agent_id, expense_date, personal_expense, marketing_1, marketing_2, marketing_3, total_amount, total_cash, cash_after_expenses, wallets_balances),
+        expense:daily_expenses(*),
         reviewer:profiles!edit_expense_requests_reviewed_by_fkey(full_name)
       `, { count: "exact" });
 
@@ -1109,8 +1106,8 @@ export async function getAdminEditRequestsPaginated(params: {
 
     return { success: true, data: data || [], totalCount: count || 0 };
   } catch (err: any) {
-    console.error("getAdminEditRequestsPaginated error:", err);
-    return { success: false, error: err.message, data: [], totalCount: 0 };
+    console.error("getAdminEditRequestsPaginated error:", err?.message || err?.details || err);
+    return { success: false, error: err?.message || "حدث خطأ أثناء جلب طلبات التعديل", data: [], totalCount: 0 };
   }
 }
 

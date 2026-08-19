@@ -28,7 +28,15 @@ export interface DashboardOverviewData {
       totalReceived: number; // approved + received
       totalSpent: number; // expenses + sent
     };
-    wallets: {
+    requestsOverview: {
+      pendingFundCount: number;
+      pendingFundAmount: number;
+      approvedFundCount: number;
+      approvedFundAmount: number;
+      pendingEditCount: number;
+      totalFundCount: number;
+    };
+    wallets?: {
       totalCash: number;
       activeCount: number;
       list: {
@@ -90,6 +98,7 @@ export async function getDashboardOverview(params: {
         metrics: {
           monthlyExpenses: { total: 0, personal: 0, marketing1: 0, marketing2: 0, marketing3: 0, transfersSent: 0 },
           custody: { total: 0, approvedFunds: 0, receivedCustody: 0, expensesTotal: 0, sentCustody: 0, pendingFunds: 0, pendingCount: 0, totalReceived: 0, totalSpent: 0 },
+          requestsOverview: { pendingFundCount: 0, pendingFundAmount: 0, approvedFundCount: 0, approvedFundAmount: 0, pendingEditCount: 0, totalFundCount: 0 },
           wallets: { totalCash: 0, activeCount: 0, list: [] },
         },
         charts: { dailyTrend: [], distribution: [] },
@@ -112,6 +121,7 @@ export async function getDashboardOverview(params: {
         metrics: {
           monthlyExpenses: { total: 0, personal: 0, marketing1: 0, marketing2: 0, marketing3: 0, transfersSent: 0 },
           custody: { total: 0, approvedFunds: 0, receivedCustody: 0, expensesTotal: 0, sentCustody: 0, pendingFunds: 0, pendingCount: 0, totalReceived: 0, totalSpent: 0 },
+          requestsOverview: { pendingFundCount: 0, pendingFundAmount: 0, approvedFundCount: 0, approvedFundAmount: 0, pendingEditCount: 0, totalFundCount: 0 },
           wallets: { totalCash: 0, activeCount: 0, list: [] },
         },
         charts: { dailyTrend: [], distribution: [] },
@@ -356,6 +366,17 @@ export async function getDashboardOverview(params: {
       percentage: Math.round((c.amount / totalDistributionSum) * 1000) / 10,
     }));
 
+    // --- QUERY 7: Fetch Edit Requests count for pending status ---
+    const { data: editRequestsAllTime } = await supabaseAdmin
+      .from("edit_expense_requests")
+      .select("status")
+      .in("agent_id", targetAgentIds);
+
+    const pendingEditCount = (editRequestsAllTime || []).filter((req) => req.status === "pending").length;
+    const pendingFundCount = (fundRequestsAllTime || []).filter((req) => req.status === "pending").length;
+    const approvedFundCount = (fundRequestsAllTime || []).filter((req) => req.status === "approved").length;
+    const totalFundCount = (fundRequestsAllTime || []).length;
+
     return {
       success: true,
       role,
@@ -376,9 +397,17 @@ export async function getDashboardOverview(params: {
           expensesTotal: expensesTotalSum,
           sentCustody: sentCustodySum,
           pendingFunds: pendingFundsSum,
-          pendingCount: (fundRequestsAllTime || []).filter((req) => req.status === "pending").length,
+          pendingCount: pendingFundCount,
           totalReceived: custodyTotalReceived,
           totalSpent: custodyTotalSpent,
+        },
+        requestsOverview: {
+          pendingFundCount,
+          pendingFundAmount: pendingFundsSum,
+          approvedFundCount,
+          approvedFundAmount: approvedFundsSum,
+          pendingEditCount,
+          totalFundCount,
         },
         wallets: {
           totalCash: totalCashInWallets,
@@ -401,6 +430,7 @@ export async function getDashboardOverview(params: {
       metrics: {
         monthlyExpenses: { total: 0, personal: 0, marketing1: 0, marketing2: 0, marketing3: 0, transfersSent: 0 },
         custody: { total: 0, approvedFunds: 0, receivedCustody: 0, expensesTotal: 0, sentCustody: 0, pendingFunds: 0, pendingCount: 0, totalReceived: 0, totalSpent: 0 },
+        requestsOverview: { pendingFundCount: 0, pendingFundAmount: 0, approvedFundCount: 0, approvedFundAmount: 0, pendingEditCount: 0, totalFundCount: 0 },
         wallets: { totalCash: 0, activeCount: 0, list: [] },
       },
       charts: { dailyTrend: [], distribution: [] },

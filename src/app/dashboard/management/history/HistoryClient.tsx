@@ -867,12 +867,12 @@ export default function HistoryClient({
                           )}
                         </td>
                         <td className="py-4 font-bold text-white font-inter text-sm">
-                          <div>{Number(req.amount_requested).toLocaleString("en-US")} ج.م</div>
+                          <div>{Number(req.amount_requested).toLocaleString("en-US")}</div>
                           {req.is_multi_wallet && Array.isArray(req.multi_wallet_data) && (
                             <div className="text-[9.5px] text-brand-dim/80 space-y-0.5 mt-0.5 font-normal font-inter">
                               {req.multi_wallet_data.map((item: any, idx: number) => (
                                 <div key={idx}>
-                                  {Number(item.amount_requested || item.amount).toLocaleString("en-US")} ج.م
+                                  {Number(item.amount_requested || item.amount).toLocaleString("en-US")}
                                 </div>
                               ))}
                             </div>
@@ -882,13 +882,13 @@ export default function HistoryClient({
                           {req.status === "approved" ? (
                             <div>
                               <span className="font-bold text-brand-accent text-sm">
-                                {Number(req.amount_approved).toLocaleString("en-US")} ج.م
+                                {Number(req.amount_approved).toLocaleString("en-US")}
                               </span>
                               {req.is_multi_wallet && Array.isArray(req.multi_wallet_data) && (
                                 <div className="text-[9.5px] text-brand-dim/80 space-y-0.5 mt-0.5 font-normal">
                                   {req.multi_wallet_data.map((item: any, idx: number) => (
                                     <div key={idx}>
-                                      {Number(item.amount_approved).toLocaleString("en-US")} ج.م
+                                      {Number(item.amount_approved).toLocaleString("en-US")}
                                     </div>
                                   ))}
                                 </div>
@@ -937,7 +937,6 @@ export default function HistoryClient({
                       <th className="pb-3.5 pr-2 font-bold">الموظف</th>
                       <th className="pb-3.5 font-bold">تاريخ التقرير</th>
                       <th className="pb-3.5 font-bold">توتال الكاش</th>
-                      <th className="pb-3.5 font-bold">توتال كاش بعد الخصم</th>
                       <th className="pb-3.5 font-bold">إجمالي المصروفات</th>
                       <th className="pb-3.5 font-bold">تسويق 1</th>
                       <th className="pb-3.5 font-bold">تسويق 2</th>
@@ -959,25 +958,22 @@ export default function HistoryClient({
                           {formatDate(exp.expense_date)}
                         </td>
                         <td className="py-4 font-inter text-white/90">
-                          {Number(exp.total_cash || 0).toLocaleString("en-US")} ج.م
-                        </td>
-                        <td className="py-4 font-inter text-white/90 font-bold text-brand-accent">
-                          {Number(exp.cash_after_expenses || 0).toLocaleString("en-US")} ج.م
+                          {Number(exp.total_cash || 0).toLocaleString("en-US")}
                         </td>
                         <td className="py-4 font-inter text-white/90">
-                          {Number(exp.total_amount).toLocaleString("en-US")} ج.م
+                          {Number(exp.total_amount).toLocaleString("en-US")}
                         </td>
                         <td className="py-4 font-inter text-white/90">
-                          {Number(exp.marketing_1).toLocaleString("en-US")} ج.م
+                          {Number(exp.marketing_1).toLocaleString("en-US")}
                         </td>
                         <td className="py-4 font-inter text-white/90">
-                          {Number(exp.marketing_2).toLocaleString("en-US")} ج.م
+                          {Number(exp.marketing_2).toLocaleString("en-US")}
                         </td>
                         <td className="py-4 font-inter text-white/90">
-                          {Number(exp.marketing_3).toLocaleString("en-US")} ج.م
+                          {Number(exp.marketing_3).toLocaleString("en-US")}
                         </td>
                         <td className="py-4 pl-2 font-inter text-white/90">
-                          {Number(exp.personal_expense).toLocaleString("en-US")} ج.م
+                          {Number(exp.personal_expense).toLocaleString("en-US")}
                         </td>
                       </tr>
                     ))}
@@ -1030,17 +1026,17 @@ export default function HistoryClient({
                           <td className="py-4 max-w-[280px]">
                             <div className="flex flex-col gap-1 bg-[#090b16]/40 border border-brand-border/20 rounded-xl p-2.5 text-[10px] leading-relaxed text-brand-dim">
                               {changes.total_cash !== undefined && (
-                                <div>توتال كاش جديد: <strong className="text-white font-inter">{changes.total_cash} ج.م</strong></div>
+                                <div>توتال كاش جديد: <strong className="text-white font-inter">{changes.total_cash}</strong></div>
                               )}
                               {changes.cash_after_expenses !== undefined && (
-                                <div>كاش بعد الخصم جديد: <strong className="text-white font-inter">{changes.cash_after_expenses} ج.م</strong></div>
+                                <div>كاش بعد الخصم جديد: <strong className="text-white font-inter">{changes.cash_after_expenses}</strong></div>
                               )}
-                              <div>إجمالي جديد: <strong className="text-white font-inter">{changes.total_amount} ج.م</strong></div>
+                              <div>إجمالي جديد: <strong className="text-white font-inter">{changes.total_amount}</strong></div>
                               <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 mt-1 border-t border-brand-border/10 pt-1">
-                                <div>تسويق 1: <span className="font-inter">{changes.marketing_1} ج.م</span></div>
-                                <div>تسويق 2: <span className="font-inter">{changes.marketing_2} ج.م</span></div>
-                                <div>تسويق 3: <span className="font-inter">{changes.marketing_3} ج.m</span></div>
-                                <div>شخصي: <span className="font-inter">{changes.personal_expense} ج.م</span></div>
+                                <div>تسويق 1: <span className="font-inter">{changes.marketing_1}</span></div>
+                                <div>تسويق 2: <span className="font-inter">{changes.marketing_2}</span></div>
+                                <div>تسويق 3: <span className="font-inter">{changes.marketing_3}</span></div>
+                                <div>شخصي: <span className="font-inter">{changes.personal_expense}</span></div>
                               </div>
                             </div>
                           </td>
@@ -1089,7 +1085,7 @@ export default function HistoryClient({
                         <div className="pt-2">
                           <span className="text-xs text-brand-dim block font-medium">المبلغ المحول:</span>
                           <span className="text-xl font-extrabold text-white font-inter">
-                            {item.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })} <span className="text-xs font-cairo text-brand-accent">ج.م</span>
+                            {item.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                           </span>
                         </div>
                       </div>
@@ -1172,10 +1168,10 @@ export default function HistoryClient({
             </div>
 
             {/* Content Responsive Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className={`grid grid-cols-1 ${selectedExpense.wallets_balances && selectedExpense.wallets_balances.length > 0 ? "lg:grid-cols-3" : ""} gap-6`}>
               
-              {/* Right Side: Form details (2/3 cols) */}
-              <div className="lg:col-span-2 space-y-6">
+              {/* Right Side: Form details */}
+              <div className={`${selectedExpense.wallets_balances && selectedExpense.wallets_balances.length > 0 ? "lg:col-span-2" : "col-span-1 lg:col-span-3"} space-y-6`}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   
                   {/* Date */}
@@ -1190,7 +1186,7 @@ export default function HistoryClient({
                   <div className="space-y-1.5">
                     <span className="block text-[11px] font-semibold text-brand-dim">توتال الكاش</span>
                     <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
-                      {Number(selectedExpense.total_cash || 0).toLocaleString("en-US")} ج.م
+                      {Number(selectedExpense.total_cash || 0).toLocaleString("en-US")}
                     </div>
                   </div>
 
@@ -1198,7 +1194,7 @@ export default function HistoryClient({
                   <div className="space-y-1.5">
                     <span className="block text-[11px] font-semibold text-brand-dim">المصاريف الشخصية</span>
                     <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
-                      {Number(selectedExpense.personal_expense || 0).toLocaleString("en-US")} ج.م
+                      {Number(selectedExpense.personal_expense || 0).toLocaleString("en-US")}
                     </div>
                   </div>
 
@@ -1206,7 +1202,7 @@ export default function HistoryClient({
                   <div className="space-y-1.5">
                     <span className="block text-[11px] font-semibold text-brand-dim">مصاريف ماركتنج 1</span>
                     <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
-                      {Number(selectedExpense.marketing_1 || 0).toLocaleString("en-US")} ج.م
+                      {Number(selectedExpense.marketing_1 || 0).toLocaleString("en-US")}
                     </div>
                   </div>
 
@@ -1214,15 +1210,15 @@ export default function HistoryClient({
                   <div className="space-y-1.5">
                     <span className="block text-[11px] font-semibold text-brand-dim">مصاريف ماركتنج 3</span>
                     <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
-                      {Number(selectedExpense.marketing_3 || 0).toLocaleString("en-US")} ج.م
+                      {Number(selectedExpense.marketing_3 || 0).toLocaleString("en-US")}
                     </div>
                   </div>
 
                   {/* Marketing 2 */}
                   <div className="space-y-1.5">
-                    <span className="block text-[11px] font-semibold text-brand-dim">مصاريف ماركتنج 2 (تلقائي)</span>
+                    <span className="block text-[11px] font-semibold text-brand-dim">مصاريف ماركتنج 2</span>
                     <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
-                      {Number(selectedExpense.marketing_2 || 0).toLocaleString("en-US")} ج.م
+                      {Number(selectedExpense.marketing_2 || 0).toLocaleString("en-US")}
                     </div>
                   </div>
 
@@ -1230,17 +1226,11 @@ export default function HistoryClient({
                   <div className="space-y-1.5">
                     <span className="block text-[11px] font-semibold text-brand-dim">إجمالي مصروفات المحفظة (التوتال)</span>
                     <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
-                      {Number(selectedExpense.total_amount || 0).toLocaleString("en-US")} ج.م
+                      {Number(selectedExpense.total_amount || 0).toLocaleString("en-US")}
                     </div>
                   </div>
 
-                  {/* Cash After Expenses */}
-                  <div className="space-y-1.5">
-                    <span className="block text-[11px] font-semibold text-brand-dim">توتال الكاش بعد خصم التحويلات والمصاريف الشخصية</span>
-                    <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr font-bold text-brand-accent">
-                      {Number(selectedExpense.cash_after_expenses || 0).toLocaleString("en-US")} ج.م
-                    </div>
-                  </div>
+
 
                 </div>
 
@@ -1274,93 +1264,88 @@ export default function HistoryClient({
               </div>
 
               {/* Left Side: Wallets list snapshot (1/3 col) */}
-              <div className="lg:col-span-1 bg-[#090b16]/95 border border-brand-border/40 p-5 rounded-2xl flex flex-col justify-between min-h-[350px]">
-                <div>
-                  <h4 className="text-xs font-bold text-white border-b border-brand-border/20 pb-2.5 mb-3 flex items-center gap-2 select-none">
-                    <Wallet size={14} className="text-brand-accent" />
-                    <span>رصيد كاش المحافظ المسجل (Snapshot)</span>
-                  </h4>
+              {selectedExpense.wallets_balances && selectedExpense.wallets_balances.length > 0 && (
+                <div className="lg:col-span-1 bg-[#090b16]/95 border border-brand-border/40 p-5 rounded-2xl flex flex-col justify-between min-h-[350px]">
+                  <div>
+                    <h4 className="text-xs font-bold text-white border-b border-brand-border/20 pb-2.5 mb-3 flex items-center gap-2 select-none">
+                      <Wallet size={14} className="text-brand-accent" />
+                      <span>رصيد كاش المحافظ المسجل (Snapshot)</span>
+                    </h4>
 
-                  {(() => {
-                    const wallets = selectedExpense.wallets_balances || [];
-                    if (wallets.length === 0) {
+                    {(() => {
+                      const wallets = selectedExpense.wallets_balances || [];
+
+                      // Calculate totals
+                      let wTotal = 0;
+                      let wWithoutCamp = 0;
+                      wallets.forEach((w: any) => {
+                        const bal = Number(w.balance) || 0;
+                        wTotal += bal;
+                        if (w.wallet_id !== "campaign") {
+                          wWithoutCamp += bal;
+                        }
+                      });
+
                       return (
-                        <div className="text-center py-10 text-xs text-brand-dim/40 select-none">
-                          لا توجد لقطة أرصدة محافظ مسجلة لهذا اليوم المالي.
+                        <div className="space-y-2.5">
+                          <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1.5 custom-scrollbar">
+                            {wallets.map((w: any) => {
+                              const isCamp = w.wallet_id === "campaign";
+                              const label = isCamp ? "كامبين" : w.phone_number;
+                              return (
+                                <div
+                                  key={w.wallet_id}
+                                  className={`px-3 py-2 rounded-xl flex items-center justify-between text-xs border ${
+                                    isCamp
+                                      ? "bg-brand-accent/5 border-brand-accent/30 text-brand-accent"
+                                      : "bg-[#070814]/60 border-brand-border/25 text-white/95"
+                                  }`}
+                                >
+                                  <span className={`flex items-center gap-1.5 ${isCamp ? "font-bold font-cairo" : "font-mono select-all font-semibold"}`}>
+                                    {isCamp && <Megaphone size={12} />}
+                                    {label}
+                                  </span>
+                                  <span className="font-bold font-inter">
+                                    {Number(w.balance || 0).toLocaleString("en-US")}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Totals */}
+                          <div className="border-t border-brand-border/20 pt-3 mt-3 space-y-2 select-none">
+                            <div className="flex justify-between items-center text-[11px] font-semibold text-brand-dim">
+                              <span>إجمالي كاش المحافظ:</span>
+                              <span className="text-white font-inter font-bold">
+                                {wTotal.toLocaleString("en-US")}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center text-[11px] font-semibold text-brand-dim">
+                              <span>إجمالي الكاش بدون الكامبين:</span>
+                              <span className="text-brand-accent font-inter font-bold">
+                                {wWithoutCamp.toLocaleString("en-US")}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       );
-                    }
-
-                    // Calculate totals
-                    let wTotal = 0;
-                    let wWithoutCamp = 0;
-                    wallets.forEach((w: any) => {
-                      const bal = Number(w.balance) || 0;
-                      wTotal += bal;
-                      if (w.wallet_id !== "campaign") {
-                        wWithoutCamp += bal;
-                      }
-                    });
-
-                    return (
-                      <div className="space-y-2.5">
-                        <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1.5 custom-scrollbar">
-                          {wallets.map((w: any) => {
-                            const isCamp = w.wallet_id === "campaign";
-                            const label = isCamp ? "كامبين" : w.phone_number;
-                            return (
-                              <div
-                                key={w.wallet_id}
-                                className={`px-3 py-2 rounded-xl flex items-center justify-between text-xs border ${
-                                  isCamp
-                                    ? "bg-brand-accent/5 border-brand-accent/30 text-brand-accent"
-                                    : "bg-[#070814]/60 border-brand-border/25 text-white/95"
-                                }`}
-                              >
-                                <span className={`flex items-center gap-1.5 ${isCamp ? "font-bold font-cairo" : "font-mono select-all font-semibold"}`}>
-                                  {isCamp && <Megaphone size={12} />}
-                                  {label}
-                                </span>
-                                <span className="font-bold font-inter">
-                                  {Number(w.balance || 0).toLocaleString("en-US")} ج.م
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Totals */}
-                        <div className="border-t border-brand-border/20 pt-3 mt-3 space-y-2 select-none">
-                          <div className="flex justify-between items-center text-[11px] font-semibold text-brand-dim">
-                            <span>إجمالي كاش المحافظ:</span>
-                            <span className="text-white font-inter font-bold">
-                              {wTotal.toLocaleString("en-US")} ج.م
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center text-[11px] font-semibold text-brand-dim">
-                            <span>إجمالي الكاش بدون الكامبين:</span>
-                            <span className="text-brand-accent font-inter font-bold">
-                              {wWithoutCamp.toLocaleString("en-US")} ج.م
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
+                    })()}
+                  </div>
                 </div>
+              )}
 
-                {/* Footer Action */}
-                <div className="pt-4 border-t border-brand-border/10 mt-4 select-none">
-                  <button
-                    onClick={() => setSelectedExpense(null)}
-                    type="button"
-                    className="w-full py-2.5 bg-brand-border/30 hover:bg-brand-border/50 text-white font-bold rounded-xl text-xs transition-all cursor-pointer text-center"
-                  >
-                    إغلاق التفاصيل
-                  </button>
-                </div>
-              </div>
+            </div>
 
+            {/* Footer Action */}
+            <div className="pt-4 border-t border-brand-border/10 mt-6 select-none">
+              <button
+                onClick={() => setSelectedExpense(null)}
+                type="button"
+                className="w-full py-2.5 bg-brand-border/30 hover:bg-brand-border/50 text-white font-bold rounded-xl text-xs transition-all cursor-pointer text-center"
+              >
+                إغلاق التفاصيل
+              </button>
             </div>
 
           </div>
