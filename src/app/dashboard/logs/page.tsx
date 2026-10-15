@@ -8,6 +8,7 @@ import {
   getAgentEditRequestsPaginated,
   getAgentCustodyTransfersPaginated,
 } from "@/app/actions/operations";
+import { getMarketingSystems } from "@/app/actions/marketingSystems";
 import LogsClient from "./LogsClient";
 
 export const dynamic = "force-dynamic";
@@ -35,11 +36,14 @@ export default async function LogsPage() {
     redirect("/dashboard?error=unauthorized");
   }
 
-  // 3. Fetch initial paginated data
-  const fundRes = await getAgentFundRequestsPaginated({ page: 1, limit: 20 });
-  const expenseRes = await getAgentDailyExpensesPaginated({ page: 1, limit: 20 });
-  const editRes = await getAgentEditRequestsPaginated({ page: 1, limit: 20 });
-  const transferRes = await getAgentCustodyTransfersPaginated({ page: 1, limit: 20 });
+  // 3. Fetch initial paginated data and marketing systems
+  const [fundRes, expenseRes, editRes, transferRes, marketingSystems] = await Promise.all([
+    getAgentFundRequestsPaginated({ page: 1, limit: 20 }),
+    getAgentDailyExpensesPaginated({ page: 1, limit: 20 }),
+    getAgentEditRequestsPaginated({ page: 1, limit: 20 }),
+    getAgentCustodyTransfersPaginated({ page: 1, limit: 20 }),
+    getMarketingSystems(),
+  ]);
 
   return (
     <LogsClient
@@ -51,6 +55,7 @@ export default async function LogsPage() {
       initialEditCount={editRes.success && editRes.totalCount !== undefined ? editRes.totalCount : 0}
       initialCustodyTransfers={transferRes.success && transferRes.data ? transferRes.data : []}
       initialTransferCount={transferRes.success && transferRes.totalCount !== undefined ? transferRes.totalCount : 0}
+      marketingSystems={marketingSystems}
     />
   );
 }

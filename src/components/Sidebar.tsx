@@ -24,6 +24,7 @@ import {
   Sun,
   Moon,
   Check,
+  Layers,
 } from "lucide-react";
 
 interface NotificationItem {
@@ -49,6 +50,8 @@ interface SidebarProps {
   sys2Url?: string;
   sys3Url?: string;
   sys4Url?: string;
+  marketingSystems?: { id: string; name: string; order_index: number }[];
+  sheetUrls?: Record<string, string>;
 }
 
 export default function Sidebar({
@@ -65,6 +68,8 @@ export default function Sidebar({
   sys2Url,
   sys3Url,
   sys4Url,
+  marketingSystems = [],
+  sheetUrls = {},
 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -146,6 +151,12 @@ export default function Sidebar({
       name: "الموظفين (Agents)",
       path: "/dashboard/agents",
       icon: Users,
+      allowedRoles: ["admin"],
+    },
+    {
+      name: "أنظمة التسويق والمصاريف",
+      path: "/dashboard/admin/marketing-systems",
+      icon: Layers,
       allowedRoles: ["admin"],
     },
     {
@@ -512,58 +523,88 @@ export default function Sidebar({
         })}
 
         {/* Work Sheets Section for Agents */}
-        {(role === "agent" || role === "senioragent") && (sys1Url || sys2Url || sys3Url || sys4Url) && (
-          <>
-            <div className="my-5 border-t border-brand-border/20 mx-2" />
-            <span className="block text-[11px] font-bold text-brand-accent/90 px-4 mb-2 uppercase tracking-wider font-cairo">شيتات العمل</span>
-            <div className="space-y-1">
-              {sys1Url && (
-                <a
-                  href={sys1Url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between px-4 py-2.5 rounded-xl transition-all duration-300 text-xs md:text-sm text-white/60 hover:text-white hover:bg-white/5 font-medium cursor-pointer"
-                >
-                  <span>شيت Marketing Sys 1</span>
-                  <ExternalLink size={14} className="text-white/40 group-hover:text-white" />
-                </a>
-              )}
-              {sys2Url && (
-                <a
-                  href={sys2Url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between px-4 py-2.5 rounded-xl transition-all duration-300 text-xs md:text-sm text-white/60 hover:text-white hover:bg-white/5 font-medium cursor-pointer"
-                >
-                  <span>شيت Marketing Sys 2</span>
-                  <ExternalLink size={14} className="text-white/40 group-hover:text-white" />
-                </a>
-              )}
-              {sys3Url && (
-                <a
-                  href={sys3Url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between px-4 py-2.5 rounded-xl transition-all duration-300 text-xs md:text-sm text-white/60 hover:text-white hover:bg-white/5 font-medium cursor-pointer"
-                >
-                  <span>شيت Marketing Sys 3</span>
-                  <ExternalLink size={14} className="text-white/40 group-hover:text-white" />
-                </a>
-              )}
-              {sys4Url && (
-                <a
-                  href={sys4Url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between px-4 py-2.5 rounded-xl transition-all duration-300 text-xs md:text-sm text-white/60 hover:text-white hover:bg-white/5 font-medium cursor-pointer"
-                >
-                  <span>شيت Marketing Sys 4</span>
-                  <ExternalLink size={14} className="text-white/40 group-hover:text-white" />
-                </a>
-              )}
-            </div>
-          </>
-        )}
+        {(role === "agent" || role === "senioragent") && (() => {
+          // Check for dynamic sheets
+          const dynamicLinks = (marketingSystems || []).filter((sys) => Boolean(sheetUrls?.[sys.id]));
+          const hasLegacyLinks = Boolean(sys1Url || sys2Url || sys3Url || sys4Url);
+
+          if (dynamicLinks.length === 0 && !hasLegacyLinks) return null;
+
+          return (
+            <>
+              <div className="my-5 border-t border-brand-border/20 mx-2" />
+              <span className="block text-[11px] font-bold text-brand-accent/90 px-4 mb-2 uppercase tracking-wider font-cairo">
+                شيتات العمل
+              </span>
+              <div className="space-y-1">
+                {dynamicLinks.length > 0 ? (
+                  dynamicLinks.map((sys) => {
+                    const url = sheetUrls![sys.id];
+                    return (
+                      <a
+                        key={sys.id}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between px-4 py-2.5 rounded-xl transition-all duration-300 text-xs md:text-sm text-white/60 hover:text-white hover:bg-white/5 font-medium cursor-pointer group"
+                      >
+                        <span className="truncate">شيت {sys.name}</span>
+                        <ExternalLink size={14} className="text-white/40 group-hover:text-white shrink-0 mr-1.5" />
+                      </a>
+                    );
+                  })
+                ) : (
+                  <>
+                    {sys1Url && (
+                      <a
+                        href={sys1Url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between px-4 py-2.5 rounded-xl transition-all duration-300 text-xs md:text-sm text-white/60 hover:text-white hover:bg-white/5 font-medium cursor-pointer"
+                      >
+                        <span>شيت Marketing Sys 1</span>
+                        <ExternalLink size={14} className="text-white/40 group-hover:text-white" />
+                      </a>
+                    )}
+                    {sys2Url && (
+                      <a
+                        href={sys2Url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between px-4 py-2.5 rounded-xl transition-all duration-300 text-xs md:text-sm text-white/60 hover:text-white hover:bg-white/5 font-medium cursor-pointer"
+                      >
+                        <span>شيت Marketing Sys 2</span>
+                        <ExternalLink size={14} className="text-white/40 group-hover:text-white" />
+                      </a>
+                    )}
+                    {sys3Url && (
+                      <a
+                        href={sys3Url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between px-4 py-2.5 rounded-xl transition-all duration-300 text-xs md:text-sm text-white/60 hover:text-white hover:bg-white/5 font-medium cursor-pointer"
+                      >
+                        <span>شيت Marketing Sys 3</span>
+                        <ExternalLink size={14} className="text-white/40 group-hover:text-white" />
+                      </a>
+                    )}
+                    {sys4Url && (
+                      <a
+                        href={sys4Url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between px-4 py-2.5 rounded-xl transition-all duration-300 text-xs md:text-sm text-white/60 hover:text-white hover:bg-white/5 font-medium cursor-pointer"
+                      >
+                        <span>شيت Marketing Sys 4</span>
+                        <ExternalLink size={14} className="text-white/40 group-hover:text-white" />
+                      </a>
+                    )}
+                  </>
+                )}
+              </div>
+            </>
+          );
+        })()}
       </nav>
 
       {/* Sidebar Footer (User Card & Logout) */}

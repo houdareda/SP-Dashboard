@@ -40,6 +40,7 @@ interface OperationsClientProps {
   colleagues: ColleagueData[];
   userFullName: string;
   currentCustody: number;
+  marketingSystems?: { id: string; name: string; order_index: number }[];
 }
 
 type TabType = "fund-request" | "daily-expenses" | "edit-expenses";
@@ -54,6 +55,7 @@ export default function OperationsClient({
   colleagues,
   userFullName,
   currentCustody,
+  marketingSystems = [],
 }: OperationsClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>("fund-request");
@@ -235,9 +237,7 @@ export default function OperationsClient({
   // ----------------------------------------------------
   const [expenseDate, setExpenseDate] = useState("");
   const [totalAmount, setTotalAmount] = useState("");
-  const [marketing1, setMarketing1] = useState("");
-  const [marketing2, setMarketing2] = useState("");
-  const [marketing3, setMarketing3] = useState("");
+  const [marketingExpenses, setMarketingExpenses] = useState<Record<string, string>>({});
   const [personalExpense, setPersonalExpense] = useState("");
   const [transfers, setTransfers] = useState<TransferField[]>([]);
   const [closingPassword, setClosingPassword] = useState("");
@@ -286,14 +286,15 @@ export default function OperationsClient({
       return;
     }
 
-    const m1 = parseFloat(marketing1) || 0;
-    const m2 = parseFloat(marketing2) || 0;
-    const m3 = parseFloat(marketing3) || 0;
+    const totalMarketing = Object.values(marketingExpenses).reduce(
+      (sum, val) => sum + (parseFloat(val) || 0),
+      0
+    );
     const pers = parseFloat(personalExpense) || 0;
     const totAmt = parseFloat(totalAmount) || 0;
     const transSum = transfers.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
 
-    const expectedSum = pers + m1 + m2 + m3 + transSum;
+    const expectedSum = pers + totalMarketing + transSum;
 
     if (Math.abs(totAmt - expectedSum) > 0.01) {
       showToast(
@@ -310,14 +311,17 @@ export default function OperationsClient({
         amount: parseFloat(t.amount) || 0,
       }));
 
+    const formattedMarketing: Record<string, number> = {};
+    marketingSystems.forEach((sys) => {
+      formattedMarketing[sys.id] = parseFloat(marketingExpenses[sys.id] || "0") || 0;
+    });
+
     startTransition(async () => {
       const res = await submitDailyExpenses(
         {
           expenseDate,
           totalAmount: totAmt,
-          marketing1: m1,
-          marketing2: m2,
-          marketing3: m3,
+          marketingExpenses: formattedMarketing,
           personalExpense: pers,
           transfers: formattedTransfers,
           totalCash: parseFloat(totalCash) || 0,
@@ -330,9 +334,7 @@ export default function OperationsClient({
       if (res.success) {
         showToast("تم إغلاق اليوم المالي بنجاح وحفظ كافة المصروفات والتحويلات.", "success");
         setTotalAmount("");
-        setMarketing1("");
-        setMarketing2("");
-        setMarketing3("");
+        setMarketingExpenses({});
         setPersonalExpense("");
         setTransfers([]);
         setClosingPassword("");
@@ -352,9 +354,10 @@ export default function OperationsClient({
   const [originalReport, setOriginalReport] = useState<{
     id: string;
     totalAmount: number;
-    marketing1: number;
-    marketing2: number;
-    marketing3: number;
+    marketingExpenses?: Record<string, number>;
+    marketing1?: number;
+    marketing2?: number;
+    marketing3?: number;
     personalExpense: number;
     expenseDate: string;
     totalCash?: number;
@@ -365,9 +368,7 @@ export default function OperationsClient({
   // Edit fields states
   const [editTotalCash, setEditTotalCash] = useState("");
   const [editTotalAmount, setEditTotalAmount] = useState("");
-  const [editMarketing1, setEditMarketing1] = useState("");
-  const [editMarketing2, setEditMarketing2] = useState("");
-  const [editMarketing3, setEditMarketing3] = useState("");
+  const [editMarketingExpenses, setEditMarketingExpenses] = useState<Record<string, string>>({});
   const [editPersonalExpense, setEditPersonalExpense] = useState("");
   const [editTransfers, setEditTransfers] = useState<TransferField[]>([]);
 
@@ -386,10 +387,16 @@ export default function OperationsClient({
         setOriginalReport(res.report);
         setEditTotalCash(String(res.report.totalCash || ""));
         setEditTotalAmount(String(res.report.totalAmount || ""));
-        setEditMarketing1(String(res.report.marketing1 || ""));
-        setEditMarketing2(String(res.report.marketing2 || ""));
-        setEditMarketing3(String(res.report.marketing3 || ""));
         setEditPersonalExpense(String(res.report.personalExpense || ""));
+
+        const mExp = (res.report as any).marketingExpenses || {};
+        const initialEditM: Record<string, string> = {};
+        marketingSystems.forEach((sys) => {
+          const val = mExp[sys.id] ?? (res.report as any)[`marketing_${sys.order_index}`] ?? (res.report as any)[`marketing${sys.order_index}`];
+          initialEditM[sys.id] = val !== undefined && val !== null ? String(val) : "";
+        });
+        setEditMarketingExpenses(initialEditM);
+
         setEditTransfers(
           (res.transfers || []).map((t) => ({
             toAgentId: t.toAgentId,
@@ -429,15 +436,16 @@ export default function OperationsClient({
 
     if (!originalReport) return;
 
-    const editMarketing1Val = parseFloat(editMarketing1) || 0;
-    const editMarketing2Val = parseFloat(editMarketing2) || 0;
-    const editMarketing3Val = parseFloat(editMarketing3) || 0;
+    const totalEditMarketing = Object.values(editMarketingExpenses).reduce(
+      (sum, val) => sum + (parseFloat(val) || 0),
+      0
+    );
     const editPersonalExpenseVal = parseFloat(editPersonalExpense) || 0;
     const editTotalCashVal = parseFloat(editTotalCash) || 0;
     const editTotalAmountVal = parseFloat(editTotalAmount) || 0;
     const editTransfersSum = editTransfers.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
 
-    const expectedEditSum = editPersonalExpenseVal + editMarketing1Val + editMarketing2Val + editMarketing3Val + editTransfersSum;
+    const expectedEditSum = editPersonalExpenseVal + totalEditMarketing + editTransfersSum;
 
     if (Math.abs(editTotalAmountVal - expectedEditSum) > 0.01) {
       showToast(
@@ -454,14 +462,17 @@ export default function OperationsClient({
         amount: parseFloat(t.amount) || 0,
       }));
 
+    const numEditMarketing: Record<string, number> = {};
+    marketingSystems.forEach((sys) => {
+      numEditMarketing[sys.id] = parseFloat(editMarketingExpenses[sys.id] || "0") || 0;
+    });
+
     startTransition(async () => {
       const res = await submitEditExpenseRequest(
         originalReport.id,
         {
           totalAmount: editTotalAmountVal,
-          marketing1: editMarketing1Val,
-          marketing2: editMarketing2Val,
-          marketing3: editMarketing3Val,
+          marketingExpenses: numEditMarketing,
           personalExpense: editPersonalExpenseVal,
           transfers: formattedTransfers,
           totalCash: editTotalCashVal,
@@ -476,6 +487,7 @@ export default function OperationsClient({
         // Reset tab
         setOriginalReport(null);
         setEditSearchDate("");
+        setEditMarketingExpenses({});
         router.refresh();
       } else {
         showToast(res.error || "فشل إرسال طلب التعديل.", "error");
@@ -1224,74 +1236,35 @@ export default function OperationsClient({
                   ) : null}
                 </div>
 
-                {/* 5. Marketing 1 (مصاريف ماركتنج 1 (ج.م)) */}
-                <div className="space-y-2 md:col-span-2">
-                  <label htmlFor="marketing1" className="block text-[13px] font-medium text-brand-dim">
-                    مصاريف ماركتنج 1
-                  </label>
-                  <div className="relative">
-                    <input
-                      id="marketing1"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      disabled={isPending}
-                      value={marketing1}
-                      onChange={(e) => setMarketing1(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
-                    />
-                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
-                      <Coins size={16} />
-                    </span>
+                {/* Dynamic Marketing Systems */}
+                {marketingSystems.map((sys) => (
+                  <div key={sys.id} className="space-y-2 md:col-span-2">
+                    <label htmlFor={`marketing_${sys.id}`} className="block text-[13px] font-medium text-brand-dim">
+                      {sys.name}
+                    </label>
+                    <div className="relative">
+                      <input
+                        id={`marketing_${sys.id}`}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        disabled={isPending}
+                        value={marketingExpenses[sys.id] || ""}
+                        onChange={(e) =>
+                          setMarketingExpenses((prev) => ({
+                            ...prev,
+                            [sys.id]: e.target.value,
+                          }))
+                        }
+                        placeholder="0.00"
+                        className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
+                      />
+                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
+                        <Coins size={16} />
+                      </span>
+                    </div>
                   </div>
-                </div>
-
-                {/* 6. Marketing 2 (مصاريف ماركتنج 2 (ج.م)) */}
-                <div className="space-y-2 md:col-span-2">
-                  <label htmlFor="marketing2" className="block text-[13px] font-medium text-brand-dim">
-                    مصاريف ماركتنج 2
-                  </label>
-                  <div className="relative">
-                    <input
-                      id="marketing2"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      disabled={isPending}
-                      value={marketing2}
-                      onChange={(e) => setMarketing2(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
-                    />
-                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
-                      <Coins size={16} />
-                    </span>
-                  </div>
-                </div>
-
-                {/* 7. Marketing 3 (مصاريف ماركتنج 3 (ج.م)) */}
-                <div className="space-y-2 md:col-span-2">
-                  <label htmlFor="marketing3" className="block text-[13px] font-medium text-brand-dim">
-                    مصاريف ماركتنج 3
-                  </label>
-                  <div className="relative">
-                    <input
-                      id="marketing3"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      disabled={isPending}
-                      value={marketing3}
-                      onChange={(e) => setMarketing3(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
-                    />
-                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
-                      <Coins size={16} />
-                    </span>
-                  </div>
-                </div>
+                ))}
 
               </div>
 
@@ -1505,74 +1478,35 @@ export default function OperationsClient({
                     </div>
                   </div>
 
-                  {/* 5. Marketing 1 */}
-                  <div className="space-y-2 text-right md:col-span-2">
-                    <label htmlFor="editMarketing1" className="block text-[13px] font-medium text-brand-dim">
-                      مصاريف ماركتنج 1 المقترحة
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="editMarketing1"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        disabled={isPending}
-                        value={editMarketing1}
-                        onChange={(e) => setEditMarketing1(e.target.value)}
-                        placeholder="0.00"
-                        className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
-                      />
-                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
-                        <Coins size={16} />
-                      </span>
+                  {/* Dynamic Marketing Systems */}
+                  {marketingSystems.map((sys) => (
+                    <div key={sys.id} className="space-y-2 text-right md:col-span-2">
+                      <label htmlFor={`edit_marketing_${sys.id}`} className="block text-[13px] font-medium text-brand-dim">
+                        {sys.name} المقترحة
+                      </label>
+                      <div className="relative">
+                        <input
+                          id={`edit_marketing_${sys.id}`}
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          disabled={isPending}
+                          value={editMarketingExpenses[sys.id] || ""}
+                          onChange={(e) =>
+                            setEditMarketingExpenses((prev) => ({
+                              ...prev,
+                              [sys.id]: e.target.value,
+                            }))
+                          }
+                          placeholder="0.00"
+                          className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
+                        />
+                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
+                          <Coins size={16} />
+                        </span>
+                      </div>
                     </div>
-                  </div>
-
-                  {/* 6. Editable Marketing 2 (أصبح يدوي) */}
-                  <div className="space-y-2 text-right md:col-span-2">
-                    <label htmlFor="editMarketing2" className="block text-[13px] font-medium text-brand-dim">
-                      مصاريف ماركتنج 2 المقترحة
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="editMarketing2"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        disabled={isPending}
-                        value={editMarketing2}
-                        onChange={(e) => setEditMarketing2(e.target.value)}
-                        placeholder="0.00"
-                        className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
-                      />
-                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
-                        <Coins size={16} />
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 7. Marketing 3 */}
-                  <div className="space-y-2 text-right md:col-span-2">
-                    <label htmlFor="editMarketing3" className="block text-[13px] font-medium text-brand-dim">
-                      مصاريف ماركتنج 3 المقترحة
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="editMarketing3"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        disabled={isPending}
-                        value={editMarketing3}
-                        onChange={(e) => setEditMarketing3(e.target.value)}
-                        placeholder="0.00"
-                        className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
-                      />
-                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
-                        <Coins size={16} />
-                      </span>
-                    </div>
-                  </div>
+                  ))}
 
                 </div>
 

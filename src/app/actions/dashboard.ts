@@ -15,6 +15,11 @@ export interface DashboardOverviewData {
       marketing1: number;
       marketing2: number;
       marketing3: number;
+      marketingSystemsBreakdown?: {
+        id: string;
+        name: string;
+        amount: number;
+      }[];
       transfersSent: number;
     };
     custody: {
@@ -174,10 +179,17 @@ export async function getDashboardOverview(params: {
     const startDate = params.startDate || currentMonthStart;
     const endDate = params.endDate || currentMonthEnd;
 
+    // Fetch marketing systems for dynamic breakdown
+    const { data: mSystems } = await supabaseAdmin
+      .from("marketing_systems")
+      .select("id, name, display_order")
+      .order("display_order", { ascending: true });
+    const marketingSystems = mSystems || [];
+
     // --- QUERY 1: Fetch Daily Expenses in current month (for Monthly Expenses card & charts) ---
     const { data: expensesCurrentMonth, error: expError } = await supabaseAdmin
       .from("daily_expenses")
-      .select("id, total_amount, marketing_1, marketing_2, marketing_3, personal_expense, expense_date, agent_id")
+      .select("id, total_amount, marketing_expenses, marketing_1, marketing_2, marketing_3, personal_expense, expense_date, agent_id")
       .in("agent_id", targetAgentIds)
       .gte("expense_date", currentMonthStart)
       .lte("expense_date", currentMonthEnd);
@@ -205,14 +217,18 @@ export async function getDashboardOverview(params: {
     // --- QUERY 3: Fetch all-time Daily Expenses (for Custody total) ---
     const { data: expensesAllTime } = await supabaseAdmin
       .from("daily_expenses")
-      .select("id, personal_expense, marketing_1, marketing_2, marketing_3")
+      .select("id, personal_expense, marketing_expenses, marketing_1, marketing_2, marketing_3")
       .in("agent_id", targetAgentIds);
 
     const personalAllTime = (expensesAllTime || []).reduce((sum, e) => sum + (Number(e.personal_expense) || 0), 0);
-    const marketing1AllTime = (expensesAllTime || []).reduce((sum, e) => sum + (Number(e.marketing_1) || 0), 0);
-    const marketing2AllTime = (expensesAllTime || []).reduce((sum, e) => sum + (Number(e.marketing_2) || 0), 0);
-    const marketing3AllTime = (expensesAllTime || []).reduce((sum, e) => sum + (Number(e.marketing_3) || 0), 0);
-    const expensesTotalSum = personalAllTime + marketing1AllTime + marketing2AllTime + marketing3AllTime;
+    const marketingAllTime = (expensesAllTime || []).reduce((sum, e: any) => {
+      if (e.marketing_expenses && Object.keys(e.marketing_expenses).length > 0) {
+        const mSum = Object.values(e.marketing_expenses).reduce((a: number, b: any) => a + (Number(b) || 0), 0);
+        return sum + mSum;
+      }
+      return sum + (Number(e.marketing_1) || 0) + (Number(e.marketing_2) || 0) + (Number(e.marketing_3) || 0);
+    }, 0);
+    const expensesTotalSum = personalAllTime + marketingAllTime;
 
     // --- QUERY 4: Fetch all-time Transfers Sent & Received (for Custody total) ---
     const { data: transfersAllTime } = await supabaseAdmin
@@ -311,12 +327,34 @@ export async function getDashboardOverview(params: {
     }
 
     // --- CALCULATE CARD METRICS (Current Month) ---
+    const systemColors = ["#a855f7", "#10b981", "#ec4899", "#f59e0b", "#06b6d4", "#6366f1", "#14b8a6", "#f43f5e", "#8b5cf6", "#3b82f6"];
+    const systemSums: Record<string, number> = {};
+    let totalMarketingMonthSum = 0;
+
+    marketingSystems.forEach((sys) => {
+      const sum = (expensesCurrentMonth || []).reduce((acc, e: any) => {
+        let val = 0;
+        if (e.marketing_expenses && e.marketing_expenses[sys.id] !== undefined) {
+          val = Number(e.marketing_expenses[sys.id]) || 0;
+        } else if (sys.id === '11111111-1111-1111-1111-111111111111') {
+          val = Number(e.marketing_1) || 0;
+        } else if (sys.id === '22222222-2222-2222-2222-222222222222') {
+          val = Number(e.marketing_2) || 0;
+        } else if (sys.id === '33333333-3333-3333-3333-333333333333') {
+          val = Number(e.marketing_3) || 0;
+        }
+        return acc + val;
+      }, 0);
+      systemSums[sys.id] = sum;
+      totalMarketingMonthSum += sum;
+    });
+
     const personalSum = (expensesCurrentMonth || []).reduce((sum, e) => sum + (Number(e.personal_expense) || 0), 0);
-    const marketing1Sum = (expensesCurrentMonth || []).reduce((sum, e) => sum + (Number(e.marketing_1) || 0), 0);
-    const marketing2Sum = (expensesCurrentMonth || []).reduce((sum, e) => sum + (Number(e.marketing_2) || 0), 0);
-    const marketing3Sum = (expensesCurrentMonth || []).reduce((sum, e) => sum + (Number(e.marketing_3) || 0), 0);
+    const marketing1Sum = systemSums['11111111-1111-1111-1111-111111111111'] ?? (expensesCurrentMonth || []).reduce((sum, e) => sum + (Number(e.marketing_1) || 0), 0);
+    const marketing2Sum = systemSums['22222222-2222-2222-2222-222222222222'] ?? (expensesCurrentMonth || []).reduce((sum, e) => sum + (Number(e.marketing_2) || 0), 0);
+    const marketing3Sum = systemSums['33333333-3333-3333-3333-333333333333'] ?? (expensesCurrentMonth || []).reduce((sum, e) => sum + (Number(e.marketing_3) || 0), 0);
     const transfersSentSum = sentTransfersCurrentMonth.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
-    const monthlyExpensesTotal = personalSum + marketing1Sum + marketing2Sum + marketing3Sum + transfersSentSum;
+    const monthlyExpensesTotal = personalSum + totalMarketingMonthSum + transfersSentSum;
 
     // --- CALCULATE CUSTODY METRICS (All-Time) ---
     const custodyTotalReceived = approvedFundsSum + receivedCustodySum;
@@ -355,9 +393,12 @@ export async function getDashboardOverview(params: {
     const totalDistributionSum = monthlyExpensesTotal || 1; // avoid divide by zero
     const categoriesBreakdown = [
       { category: "personal", name: "مصروف شخصي", amount: personalSum, color: "#3b82f6" },
-      { category: "marketing_1", name: "سيستم 1 التسويق", amount: marketing1Sum, color: "#a855f7" },
-      { category: "marketing_2", name: "سيستم 2 التسويق", amount: marketing2Sum, color: "#10b981" },
-      { category: "marketing_3", name: "سيستم 3 التسويق", amount: marketing3Sum, color: "#ec4899" },
+      ...marketingSystems.map((sys, idx) => ({
+        category: `marketing_${sys.id}`,
+        name: sys.name,
+        amount: systemSums[sys.id] || 0,
+        color: systemColors[idx % systemColors.length],
+      })),
       { category: "transfers_sent", name: "تحويل عهدة لزميل", amount: transfersSentSum, color: "#f43f5e" },
     ];
 
@@ -388,6 +429,11 @@ export async function getDashboardOverview(params: {
           marketing1: marketing1Sum,
           marketing2: marketing2Sum,
           marketing3: marketing3Sum,
+          marketingSystemsBreakdown: marketingSystems.map((s) => ({
+            id: s.id,
+            name: s.name,
+            amount: systemSums[s.id] || 0,
+          })),
           transfersSent: transfersSentSum,
         },
         custody: {

@@ -24,15 +24,18 @@ import {
   reviewEditRequest,
   getSingleEditRequest,
 } from "@/app/actions/adminOperations";
+import { MarketingSystem } from "@/app/actions/marketingSystems";
 
 interface EditRequestsClientProps {
   initialRequests: EditExpenseRequestData[];
   initialAgents: AdminAgentOption[];
+  marketingSystems?: MarketingSystem[];
 }
 
 export default function EditRequestsClient({
   initialRequests,
   initialAgents,
+  marketingSystems = [],
 }: EditRequestsClientProps) {
   const router = useRouter();
   const [requests, setRequests] = useState<EditExpenseRequestData[]>(initialRequests);
@@ -583,18 +586,36 @@ export default function EditRequestsClient({
                         <span className="text-brand-dim select-none">المصاريف الشخصية</span>
                         <span className="font-semibold text-white font-inter">{(req.expense?.personal_expense || 0).toLocaleString("en-US")}</span>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-brand-dim select-none">مصاريف ماركتنج 1</span>
-                        <span className="font-semibold text-white font-inter">{(req.expense?.marketing_1 || 0).toLocaleString("en-US")}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-brand-dim select-none">مصاريف ماركتنج 2</span>
-                        <span className="font-semibold text-white font-inter">{(req.expense?.marketing_2 || 0).toLocaleString("en-US")}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-brand-dim select-none">مصاريف ماركتنج 3</span>
-                        <span className="font-semibold text-white font-inter">{(req.expense?.marketing_3 || 0).toLocaleString("en-US")}</span>
-                      </div>
+                      {marketingSystems.length > 0 ? (
+                        marketingSystems.map((sys) => {
+                          const origVal = req.expense?.marketing_expenses?.[sys.id] ?? (
+                            sys.id === '11111111-1111-1111-1111-111111111111' ? (req.expense?.marketing_1 || 0) :
+                            sys.id === '22222222-2222-2222-2222-222222222222' ? (req.expense?.marketing_2 || 0) :
+                            sys.id === '33333333-3333-3333-3333-333333333333' ? (req.expense?.marketing_3 || 0) : 0
+                          );
+                          return (
+                            <div key={sys.id} className="flex justify-between items-center">
+                              <span className="text-brand-dim select-none">{sys.name}</span>
+                              <span className="font-semibold text-white font-inter">{Number(origVal).toLocaleString("en-US")}</span>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <>
+                          <div className="flex justify-between items-center">
+                            <span className="text-brand-dim select-none">مصاريف ماركتنج 1</span>
+                            <span className="font-semibold text-white font-inter">{(req.expense?.marketing_1 || 0).toLocaleString("en-US")}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-brand-dim select-none">مصاريف ماركتنج 2</span>
+                            <span className="font-semibold text-white font-inter">{(req.expense?.marketing_2 || 0).toLocaleString("en-US")}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-brand-dim select-none">مصاريف ماركتنج 3</span>
+                            <span className="font-semibold text-white font-inter">{(req.expense?.marketing_3 || 0).toLocaleString("en-US")}</span>
+                          </div>
+                        </>
+                      )}
                       <div className="flex justify-between items-center border-t border-brand-border/20 pt-2.5 font-bold">
                         <span className="text-white select-none">إجمالي مصروفات المحفظة</span>
                         <span className="text-brand-accent text-sm font-inter">{(req.expense?.total_amount || 0).toLocaleString("en-US")}</span>
@@ -618,7 +639,7 @@ export default function EditRequestsClient({
                         <span className="text-brand-dim select-none">المصاريف الشخصية</span>
                         {req.requested_changes.personal_expense === req.expense?.personal_expense ? (
                           <span className="text-brand-dim/50 text-[11px] font-medium select-none">لا يوجد تغيير</span>
-                                                ) : (
+                        ) : (
                           <span className="font-bold font-inter flex items-center gap-1.5">
                             <span className="text-brand-accent">{(req.requested_changes.personal_expense || 0).toLocaleString("en-US")}</span>
                             <span className="text-brand-dim/50 text-xs">←</span>
@@ -627,47 +648,77 @@ export default function EditRequestsClient({
                         )}
                       </div>
 
-                      {/* Marketing 1 Check */}
-                      <div className="flex justify-between items-center">
-                        <span className="text-brand-dim select-none">مصاريف ماركتنج 1</span>
-                        {req.requested_changes.marketing_1 === req.expense?.marketing_1 ? (
-                          <span className="text-brand-dim/50 text-[11px] font-medium select-none">لا يوجد تغيير</span>
-                        ) : (
-                          <span className="font-bold font-inter flex items-center gap-1.5">
-                            <span className="text-brand-accent">{(req.requested_changes.marketing_1 || 0).toLocaleString("en-US")}</span>
-                            <span className="text-brand-dim/50 text-xs">←</span>
-                            <span className="text-red-400 line-through text-xs font-normal">{(req.expense?.marketing_1 || 0).toLocaleString("en-US")}</span>
-                          </span>
-                        )}
-                      </div>
+                      {/* Marketing Systems Comparison */}
+                      {marketingSystems.length > 0 ? (
+                        marketingSystems.map((sys) => {
+                          const origVal = req.expense?.marketing_expenses?.[sys.id] ?? (
+                            sys.id === '11111111-1111-1111-1111-111111111111' ? (req.expense?.marketing_1 || 0) :
+                            sys.id === '22222222-2222-2222-2222-222222222222' ? (req.expense?.marketing_2 || 0) :
+                            sys.id === '33333333-3333-3333-3333-333333333333' ? (req.expense?.marketing_3 || 0) : 0
+                          );
+                          const propVal = req.requested_changes.marketing_expenses?.[sys.id] ?? (
+                            sys.id === '11111111-1111-1111-1111-111111111111' ? (req.requested_changes.marketing_1 ?? origVal) :
+                            sys.id === '22222222-2222-2222-2222-222222222222' ? (req.requested_changes.marketing_2 ?? origVal) :
+                            sys.id === '33333333-3333-3333-3333-333333333333' ? (req.requested_changes.marketing_3 ?? origVal) : origVal
+                          );
+                          const hasChanged = Number(propVal) !== Number(origVal);
+                          return (
+                            <div key={sys.id} className="flex justify-between items-center">
+                              <span className="text-brand-dim select-none">{sys.name}</span>
+                              {!hasChanged ? (
+                                <span className="text-brand-dim/50 text-[11px] font-medium select-none">لا يوجد تغيير</span>
+                              ) : (
+                                <span className="font-bold font-inter flex items-center gap-1.5">
+                                  <span className="text-brand-accent">{Number(propVal).toLocaleString("en-US")}</span>
+                                  <span className="text-brand-dim/50 text-xs">←</span>
+                                  <span className="text-red-400 line-through text-xs font-normal">{Number(origVal).toLocaleString("en-US")}</span>
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <>
+                          <div className="flex justify-between items-center">
+                            <span className="text-brand-dim select-none">مصاريف ماركتنج 1</span>
+                            {req.requested_changes.marketing_1 === req.expense?.marketing_1 ? (
+                              <span className="text-brand-dim/50 text-[11px] font-medium select-none">لا يوجد تغيير</span>
+                            ) : (
+                              <span className="font-bold font-inter flex items-center gap-1.5">
+                                <span className="text-brand-accent">{(req.requested_changes.marketing_1 || 0).toLocaleString("en-US")}</span>
+                                <span className="text-brand-dim/50 text-xs">←</span>
+                                <span className="text-red-400 line-through text-xs font-normal">{(req.expense?.marketing_1 || 0).toLocaleString("en-US")}</span>
+                              </span>
+                            )}
+                          </div>
 
-                      {/* Marketing 2 Check */}
-                      <div className="flex justify-between items-center">
-                        <span className="text-brand-dim select-none">مصاريف ماركتنج 2</span>
-                        {req.requested_changes.marketing_2 === req.expense?.marketing_2 ? (
-                          <span className="text-brand-dim/50 text-[11px] font-medium select-none">لا يوجد تغيير</span>
-                        ) : (
-                          <span className="font-bold font-inter flex items-center gap-1.5">
-                            <span className="text-brand-accent">{(req.requested_changes.marketing_2 || 0).toLocaleString("en-US")}</span>
-                            <span className="text-brand-dim/50 text-xs">←</span>
-                            <span className="text-red-400 line-through text-xs font-normal">{(req.expense?.marketing_2 || 0).toLocaleString("en-US")}</span>
-                          </span>
-                        )}
-                      </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-brand-dim select-none">مصاريف ماركتنج 2</span>
+                            {req.requested_changes.marketing_2 === req.expense?.marketing_2 ? (
+                              <span className="text-brand-dim/50 text-[11px] font-medium select-none">لا يوجد تغيير</span>
+                            ) : (
+                              <span className="font-bold font-inter flex items-center gap-1.5">
+                                <span className="text-brand-accent">{(req.requested_changes.marketing_2 || 0).toLocaleString("en-US")}</span>
+                                <span className="text-brand-dim/50 text-xs">←</span>
+                                <span className="text-red-400 line-through text-xs font-normal">{(req.expense?.marketing_2 || 0).toLocaleString("en-US")}</span>
+                              </span>
+                            )}
+                          </div>
 
-                      {/* Marketing 3 Check */}
-                      <div className="flex justify-between items-center">
-                        <span className="text-brand-dim select-none">مصاريف ماركتنج 3</span>
-                        {req.requested_changes.marketing_3 === req.expense?.marketing_3 ? (
-                          <span className="text-brand-dim/50 text-[11px] font-medium select-none">لا يوجد تغيير</span>
-                        ) : (
-                          <span className="font-bold font-inter flex items-center gap-1.5">
-                            <span className="text-brand-accent">{(req.requested_changes.marketing_3 || 0).toLocaleString("en-US")}</span>
-                            <span className="text-brand-dim/50 text-xs">←</span>
-                            <span className="text-red-400 line-through text-xs font-normal">{(req.expense?.marketing_3 || 0).toLocaleString("en-US")}</span>
-                          </span>
-                        )}
-                      </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-brand-dim select-none">مصاريف ماركتنج 3</span>
+                            {req.requested_changes.marketing_3 === req.expense?.marketing_3 ? (
+                              <span className="text-brand-dim/50 text-[11px] font-medium select-none">لا يوجد تغيير</span>
+                            ) : (
+                              <span className="font-bold font-inter flex items-center gap-1.5">
+                                <span className="text-brand-accent">{(req.requested_changes.marketing_3 || 0).toLocaleString("en-US")}</span>
+                                <span className="text-brand-dim/50 text-xs">←</span>
+                                <span className="text-red-400 line-through text-xs font-normal">{(req.expense?.marketing_3 || 0).toLocaleString("en-US")}</span>
+                              </span>
+                            )}
+                          </div>
+                        </>
+                      )}
 
                       {/* Total Amount Check */}
                       <div className="flex justify-between items-center border-t border-brand-border/20 pt-2.5 font-bold">

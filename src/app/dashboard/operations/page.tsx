@@ -84,6 +84,15 @@ export default async function OperationsPage() {
   // Fetch current custody balance
   const currentCustody = await getAgentCurrentCustody(user.id);
 
+  // Fetch active marketing systems
+  const { data: systemsData } = await supabaseAdmin
+    .from("marketing_systems")
+    .select("id, name, order_index")
+    .eq("is_active", true)
+    .order("order_index", { ascending: true });
+
+  const marketingSystems = systemsData || [];
+
   return (
     <WalletVerificationWrapper
       needsVerification={verificationRes.needsVerification}
@@ -94,6 +103,7 @@ export default async function OperationsPage() {
         colleagues={colleagues}
         userFullName={currentProfile.full_name || "مستخدم"}
         currentCustody={currentCustody}
+        marketingSystems={marketingSystems}
       />
     </WalletVerificationWrapper>
   );

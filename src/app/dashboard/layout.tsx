@@ -22,7 +22,7 @@ export default async function DashboardLayout({
   let profile: any = null;
   const { data: userProfile, error: profileError } = await supabase
     .from("profiles")
-    .select("full_name, role, is_active, sys1_url, sys2_url, sys3_url, sys4_url")
+    .select("full_name, role, is_active, sys1_url, sys2_url, sys3_url, sys4_url, sheet_urls")
     .eq("id", user.id)
     .single();
 
@@ -30,7 +30,7 @@ export default async function DashboardLayout({
     console.warn("User client failed to fetch profile, trying admin client fallback:", profileError?.message);
     const { data: adminProfile } = await supabaseAdmin
       .from("profiles")
-      .select("full_name, role, is_active, sys1_url, sys2_url, sys3_url, sys4_url")
+      .select("full_name, role, is_active, sys1_url, sys2_url, sys3_url, sys4_url, sheet_urls")
       .eq("id", user.id)
       .single();
     if (adminProfile) {
@@ -48,6 +48,15 @@ export default async function DashboardLayout({
     redirect("/login?error=deactivated");
   }
 
+  // Fetch active marketing systems for dynamic sheets in sidebar
+  const { data: systemsData } = await supabaseAdmin
+    .from("marketing_systems")
+    .select("id, name, order_index")
+    .eq("is_active", true)
+    .order("order_index", { ascending: true });
+
+  const marketingSystems = systemsData || [];
+
   return (
     <DashboardShell
       userId={user.id}
@@ -58,6 +67,8 @@ export default async function DashboardLayout({
       sys2Url={profile.sys2_url || undefined}
       sys3Url={profile.sys3_url || undefined}
       sys4Url={profile.sys4_url || undefined}
+      marketingSystems={marketingSystems}
+      sheetUrls={profile.sheet_urls || {}}
     >
       {children}
     </DashboardShell>

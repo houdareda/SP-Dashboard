@@ -15,6 +15,8 @@ interface DashboardShellProps {
   sys2Url?: string;
   sys3Url?: string;
   sys4Url?: string;
+  marketingSystems?: { id: string; name: string; order_index: number }[];
+  sheetUrls?: Record<string, string>;
 }
 
 let sharedAudioCtx: AudioContext | null = null;
@@ -109,6 +111,8 @@ export default function DashboardShell({
   sys2Url,
   sys3Url,
   sys4Url,
+  marketingSystems,
+  sheetUrls,
 }: DashboardShellProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -342,6 +346,8 @@ export default function DashboardShell({
         sys2Url={sys2Url}
         sys3Url={sys3Url}
         sys4Url={sys4Url}
+        marketingSystems={marketingSystems}
+        sheetUrls={sheetUrls}
       />
 
       {/* Global Floating Toast Alert (bottom-left popup) */}

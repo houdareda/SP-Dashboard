@@ -29,9 +29,10 @@ export interface ExpenseTransferInput {
 export interface DailyExpensesInput {
   expenseDate: string; // 'YYYY-MM-DD'
   totalAmount: number;
-  marketing1: number;
-  marketing2: number;
-  marketing3: number;
+  marketingExpenses?: Record<string, number>;
+  marketing1?: number;
+  marketing2?: number;
+  marketing3?: number;
   personalExpense: number;
   transfers: ExpenseTransferInput[];
   totalCash: number;
@@ -41,9 +42,10 @@ export interface DailyExpensesInput {
 
 export interface EditExpensesRequestInput {
   totalAmount: number;
-  marketing1: number;
-  marketing2: number;
-  marketing3: number;
+  marketingExpenses?: Record<string, number>;
+  marketing1?: number;
+  marketing2?: number;
+  marketing3?: number;
   personalExpense: number;
   transfers: { to_agent_id: string; amount: number }[];
   totalCash?: number;
@@ -383,7 +385,7 @@ export async function submitDailyExpenses(input: DailyExpensesInput, passwordCon
       return { success: false, error: "غير مصرح بالعملية. الرجاء تسجيل الدخول أولاً." };
     }
 
-    const { expenseDate, totalAmount, marketing1, marketing2, marketing3, personalExpense, transfers, totalCash, cashAfterExpenses, walletsBalances } = input;
+    const { expenseDate, totalAmount, marketingExpenses, marketing1, marketing2, marketing3, personalExpense, transfers, totalCash, cashAfterExpenses, walletsBalances } = input;
 
     // 1. Basic validation
     if (!expenseDate) {
@@ -444,6 +446,12 @@ export async function submitDailyExpenses(input: DailyExpensesInput, passwordCon
       return { success: false, error: "كلمة المرور غير صحيحة. يرجى المحاولة مرة أخرى." };
     }
 
+    // Prepare marketing expenses object and fallbacks
+    const mExpensesObj = marketingExpenses || {};
+    const legacyM1 = marketing1 !== undefined ? marketing1 : Number(mExpensesObj['11111111-1111-1111-1111-111111111111'] || 0);
+    const legacyM2 = marketing2 !== undefined ? marketing2 : Number(mExpensesObj['22222222-2222-2222-2222-222222222222'] || 0);
+    const legacyM3 = marketing3 !== undefined ? marketing3 : Number(mExpensesObj['33333333-3333-3333-3333-333333333333'] || 0);
+
     // 4. Insert main expense record
     const { data: insertedExpense, error: expenseInsertError } = await supabaseAdmin
       .from("daily_expenses")
@@ -451,9 +459,10 @@ export async function submitDailyExpenses(input: DailyExpensesInput, passwordCon
         agent_id: user.id,
         expense_date: expenseDate,
         total_amount: totalAmount,
-        marketing_1: marketing1,
-        marketing_2: marketing2,
-        marketing_3: marketing3,
+        marketing_expenses: mExpensesObj,
+        marketing_1: legacyM1,
+        marketing_2: legacyM2,
+        marketing_3: legacyM3,
         personal_expense: personalExpense,
         total_cash: totalCash,
       })
@@ -562,6 +571,7 @@ export async function getExpenseReportForDate(dateStr: string) {
       report: {
         id: expense.id,
         totalAmount: Number(expense.total_amount) || 0,
+        marketingExpenses: expense.marketing_expenses || {},
         marketing1: Number(expense.marketing_1) || 0,
         marketing2: Number(expense.marketing_2) || 0,
         marketing3: Number(expense.marketing_3) || 0,
@@ -656,10 +666,30 @@ export async function submitEditExpenseRequest(
 
     // Compare fields
     const isPersonalChanged = Number(requestedChanges.personalExpense) !== Number(originalExpense.personal_expense);
-    const isMarketing1Changed = Number(requestedChanges.marketing1) !== Number(originalExpense.marketing_1);
-    const isMarketing2Changed = Number(requestedChanges.marketing2) !== Number(originalExpense.marketing_2);
-    const isMarketing3Changed = Number(requestedChanges.marketing3) !== Number(originalExpense.marketing_3);
     const isTotalChanged = Number(requestedChanges.totalAmount) !== Number(originalExpense.total_amount);
+
+    // Compare marketing expenses
+    let isMarketingChanged = false;
+    const reqM = requestedChanges.marketingExpenses || {};
+    const origM = (originalExpense.marketing_expenses && typeof originalExpense.marketing_expenses === "object" && Object.keys(originalExpense.marketing_expenses).length > 0)
+      ? originalExpense.marketing_expenses
+      : {
+          '11111111-1111-1111-1111-111111111111': Number(originalExpense.marketing_1) || 0,
+          '22222222-2222-2222-2222-222222222222': Number(originalExpense.marketing_2) || 0,
+          '33333333-3333-3333-3333-333333333333': Number(originalExpense.marketing_3) || 0,
+        };
+
+    const allSysKeys = new Set([...Object.keys(reqM), ...Object.keys(origM)]);
+    for (const sysId of allSysKeys) {
+      if (Math.abs(Number(reqM[sysId] || 0) - Number(origM[sysId] || 0)) > 0.001) {
+        isMarketingChanged = true;
+        break;
+      }
+    }
+
+    const legacyM1Changed = requestedChanges.marketing1 !== undefined && Number(requestedChanges.marketing1) !== Number(originalExpense.marketing_1);
+    const legacyM2Changed = requestedChanges.marketing2 !== undefined && Number(requestedChanges.marketing2) !== Number(originalExpense.marketing_2);
+    const legacyM3Changed = requestedChanges.marketing3 !== undefined && Number(requestedChanges.marketing3) !== Number(originalExpense.marketing_3);
 
     // Compare transfers
     const origTransfersMap: Record<string, number> = {};
@@ -689,7 +719,7 @@ export async function submitEditExpenseRequest(
 
     const isTotalCashChanged = requestedChanges.totalCash !== undefined && Number(requestedChanges.totalCash) !== Number(originalExpense.total_cash);
 
-    const hasAnyChanges = isPersonalChanged || isMarketing1Changed || isMarketing2Changed || isMarketing3Changed || isTotalChanged || isTransfersChanged || isTotalCashChanged;
+    const hasAnyChanges = isPersonalChanged || isMarketingChanged || legacyM1Changed || legacyM2Changed || legacyM3Changed || isTotalChanged || isTransfersChanged || isTotalCashChanged;
 
     if (!hasAnyChanges) {
       return { success: false, error: "لم تقم بتعديل أي قيم. يجب تغيير قيمة واحدة على الأقل لتقديم طلب تعديل." };
@@ -698,9 +728,10 @@ export async function submitEditExpenseRequest(
     // Format changes to JSON specification
     const dbRequestedChanges = {
       total_amount: requestedChanges.totalAmount,
-      marketing_1: requestedChanges.marketing1,
-      marketing_2: requestedChanges.marketing2,
-      marketing_3: requestedChanges.marketing3,
+      marketing_expenses: reqM,
+      marketing_1: reqM['11111111-1111-1111-1111-111111111111'] ?? requestedChanges.marketing1 ?? Number(originalExpense.marketing_1 || 0),
+      marketing_2: reqM['22222222-2222-2222-2222-222222222222'] ?? requestedChanges.marketing2 ?? Number(originalExpense.marketing_2 || 0),
+      marketing_3: reqM['33333333-3333-3333-3333-333333333333'] ?? requestedChanges.marketing3 ?? Number(originalExpense.marketing_3 || 0),
       personal_expense: requestedChanges.personalExpense,
       transfers: requestedChanges.transfers.map((t) => ({
         to_agent_id: t.to_agent_id,
@@ -946,6 +977,7 @@ export async function getAgentDailyExpensesPaginated(params: {
       id: exp.id,
       expense_date: exp.expense_date,
       total_amount: exp.total_amount,
+      marketing_expenses: exp.marketing_expenses || {},
       marketing_1: exp.marketing_1,
       marketing_2: exp.marketing_2,
       marketing_3: exp.marketing_3,
@@ -1027,15 +1059,18 @@ export async function getAgentCurrentCustody(agentId: string): Promise<number> {
     // 2. Fetch daily expenses spent (all-time)
     const { data: expenses } = await supabaseAdmin
       .from("daily_expenses")
-      .select("personal_expense, marketing_1, marketing_2, marketing_3")
+      .select("personal_expense, marketing_expenses, marketing_1, marketing_2, marketing_3")
       .eq("agent_id", agentId);
 
     const expensesSum = (expenses || []).reduce((sum, e) => {
       const p = Number(e.personal_expense) || 0;
-      const m1 = Number(e.marketing_1) || 0;
-      const m2 = Number(e.marketing_2) || 0;
-      const m3 = Number(e.marketing_3) || 0;
-      return sum + p + m1 + m2 + m3;
+      let marketingTotal = 0;
+      if (e.marketing_expenses && typeof e.marketing_expenses === "object" && Object.keys(e.marketing_expenses).length > 0) {
+        marketingTotal = Object.values(e.marketing_expenses).reduce((a: number, b: any) => a + (Number(b) || 0), 0);
+      } else {
+        marketingTotal = (Number(e.marketing_1) || 0) + (Number(e.marketing_2) || 0) + (Number(e.marketing_3) || 0);
+      }
+      return sum + p + marketingTotal;
     }, 0);
 
     // 3. Fetch custody transfers sent and received (all-time)

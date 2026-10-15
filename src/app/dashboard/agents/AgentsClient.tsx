@@ -36,6 +36,7 @@ interface Profile {
   email?: string;
   full_name: string;
   role: string;
+  sheet_urls?: Record<string, string> | null;
   sys1_url?: string | null;
   sys2_url?: string | null;
   sys3_url?: string | null;
@@ -50,9 +51,13 @@ interface Profile {
 
 interface AgentsClientProps {
   initialProfiles: Profile[];
+  marketingSystems?: { id: string; name: string; order_index: number }[];
 }
 
-export default function AgentsClient({ initialProfiles }: AgentsClientProps) {
+export default function AgentsClient({
+  initialProfiles,
+  marketingSystems = [],
+}: AgentsClientProps) {
   const router = useRouter();
   const [profiles, setProfiles] = useState<Profile[]>(initialProfiles);
   const [isPending, startTransition] = useTransition();
@@ -94,6 +99,7 @@ export default function AgentsClient({ initialProfiles }: AgentsClientProps) {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [role, setRole] = useState("agent");
+  const [sheetUrls, setSheetUrls] = useState<Record<string, string>>({});
   const [sys1Url, setSys1Url] = useState("");
   const [sys2Url, setSys2Url] = useState("");
   const [sys3Url, setSys3Url] = useState("");
@@ -102,6 +108,7 @@ export default function AgentsClient({ initialProfiles }: AgentsClientProps) {
   // Reset sheet links if the role is changed to anything other than 'agent' or 'senioragent'
   React.useEffect(() => {
     if (role !== "agent" && role !== "senioragent") {
+      setSheetUrls({});
       setSys1Url("");
       setSys2Url("");
       setSys3Url("");
@@ -189,6 +196,7 @@ export default function AgentsClient({ initialProfiles }: AgentsClientProps) {
     setPassword("");
     setFullName("");
     setRole("agent");
+    setSheetUrls({});
     setSys1Url("");
     setSys2Url("");
     setSys3Url("");
@@ -205,6 +213,16 @@ export default function AgentsClient({ initialProfiles }: AgentsClientProps) {
     setPassword("");
     setFullName(profile.full_name);
     setRole(profile.role);
+
+    const initialSheets: Record<string, string> = { ...(profile.sheet_urls || {}) };
+    marketingSystems.forEach((sys) => {
+      if (!initialSheets[sys.id]) {
+        const legacyVal = (profile as any)[`sys${sys.order_index}_url`];
+        if (legacyVal) initialSheets[sys.id] = legacyVal;
+      }
+    });
+    setSheetUrls(initialSheets);
+
     setSys1Url(profile.sys1_url || "");
     setSys2Url(profile.sys2_url || "");
     setSys3Url(profile.sys3_url || "");
@@ -235,6 +253,7 @@ export default function AgentsClient({ initialProfiles }: AgentsClientProps) {
           password,
           fullName,
           role,
+          sheetUrls,
           sys1Url,
           sys2Url,
           sys3Url,
@@ -251,6 +270,7 @@ export default function AgentsClient({ initialProfiles }: AgentsClientProps) {
             email: email,
             full_name: fullName,
             role: role,
+            sheet_urls: sheetUrls,
             sys1_url: sys1Url || null,
             sys2_url: sys2Url || null,
             sys3_url: sys3Url || null,
@@ -269,6 +289,7 @@ export default function AgentsClient({ initialProfiles }: AgentsClientProps) {
         const res = await updateEmployee(selectedProfile.id, {
           fullName,
           role,
+          sheetUrls,
           sys1Url,
           sys2Url,
           sys3Url,
@@ -288,6 +309,7 @@ export default function AgentsClient({ initialProfiles }: AgentsClientProps) {
                     ...p,
                     full_name: fullName,
                     role,
+                    sheet_urls: sheetUrls,
                     sys1_url: sys1Url || null,
                     sys2_url: sys2Url || null,
                     sys3_url: sys3Url || null,
@@ -752,8 +774,23 @@ export default function AgentsClient({ initialProfiles }: AgentsClientProps) {
             <tbody className="divide-y divide-brand-border/20 text-sm">
               {filteredAndSortedProfiles.length > 0 ? (
                 filteredAndSortedProfiles.map((profile) => {
-                  const hasSheets =
-                    profile.sys1_url || profile.sys2_url || profile.sys3_url || profile.sys4_url;
+                  const pSheets = profile.sheet_urls || {};
+                  const activeLinks = (marketingSystems || []).filter(
+                    (sys) => Boolean(pSheets[sys.id] || (profile as any)[`sys${sys.order_index}_url`])
+                  );
+                  const hasLegacySheets = Boolean(
+                    profile.sys1_url || profile.sys2_url || profile.sys3_url || profile.sys4_url
+                  );
+                  const hasSheets = activeLinks.length > 0 || hasLegacySheets;
+
+                  const badgeColors = [
+                    "bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/25",
+                    "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/25",
+                    "bg-purple-500/10 text-purple-400 border-purple-500/20 hover:bg-purple-500/25",
+                    "bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:bg-cyan-500/25",
+                    "bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/25",
+                    "bg-rose-500/10 text-rose-400 border-rose-500/20 hover:bg-rose-500/25",
+                  ];
 
                   return (
                     <tr
@@ -776,49 +813,71 @@ export default function AgentsClient({ initialProfiles }: AgentsClientProps) {
                       <td className="px-6 py-4">
                         {hasSheets ? (
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            {profile.sys1_url && (
-                              <a
-                                href={profile.sys1_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded hover:bg-blue-500/25 transition-all"
-                              >
-                                <Link2 size={10} />
-                                <span>Sys 1</span>
-                              </a>
-                            )}
-                            {profile.sys2_url && (
-                              <a
-                                href={profile.sys2_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded hover:bg-emerald-500/25 transition-all"
-                              >
-                                <Link2 size={10} />
-                                <span>Sys 2</span>
-                              </a>
-                            )}
-                            {profile.sys3_url && (
-                              <a
-                                href={profile.sys3_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded hover:bg-purple-500/25 transition-all"
-                              >
-                                <Link2 size={10} />
-                                <span>Sys 3</span>
-                              </a>
-                            )}
-                            {profile.sys4_url && (
-                              <a
-                                href={profile.sys4_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded hover:bg-cyan-500/25 transition-all"
-                              >
-                                <Link2 size={10} />
-                                <span>Sys 4</span>
-                              </a>
+                            {activeLinks.length > 0 ? (
+                              activeLinks.map((sys, sIdx) => {
+                                const url = pSheets[sys.id] || (profile as any)[`sys${sys.order_index}_url`];
+                                const colorClass = badgeColors[sIdx % badgeColors.length];
+                                return (
+                                  <a
+                                    key={sys.id}
+                                    href={url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold border rounded transition-all ${colorClass}`}
+                                    title={`شيت ${sys.name}`}
+                                  >
+                                    <Link2 size={10} />
+                                    <span>{sys.name}</span>
+                                  </a>
+                                );
+                              })
+                            ) : (
+                              <>
+                                {profile.sys1_url && (
+                                  <a
+                                    href={profile.sys1_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded hover:bg-blue-500/25 transition-all"
+                                  >
+                                    <Link2 size={10} />
+                                    <span>Sys 1</span>
+                                  </a>
+                                )}
+                                {profile.sys2_url && (
+                                  <a
+                                    href={profile.sys2_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded hover:bg-emerald-500/25 transition-all"
+                                  >
+                                    <Link2 size={10} />
+                                    <span>Sys 2</span>
+                                  </a>
+                                )}
+                                {profile.sys3_url && (
+                                  <a
+                                    href={profile.sys3_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded hover:bg-purple-500/25 transition-all"
+                                  >
+                                    <Link2 size={10} />
+                                    <span>Sys 3</span>
+                                  </a>
+                                )}
+                                {profile.sys4_url && (
+                                  <a
+                                    href={profile.sys4_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded hover:bg-cyan-500/25 transition-all"
+                                  >
+                                    <Link2 size={10} />
+                                    <span>Sys 4</span>
+                                  </a>
+                                )}
+                              </>
                             )}
                           </div>
                         ) : (
@@ -1140,85 +1199,33 @@ export default function AgentsClient({ initialProfiles }: AgentsClientProps) {
 
                   {/* Link inputs */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
-                    {/* Sys 1 */}
-                    <div className="space-y-2">
-                      <label className="block text-xs md:text-sm font-semibold text-white/80">رابط شيت 1 Marketing Sys</label>
-                      <input
-                        type="url"
-                        disabled={isPending}
-                        value={sys1Url}
-                        onChange={(e) => setSys1Url(e.target.value)}
-                        onInvalid={(e) => {
-                          const target = e.target as HTMLInputElement;
-                          if (target.validity.typeMismatch) {
-                            target.setCustomValidity("يرجى إدخال رابط URL صحيح.");
+                    {marketingSystems.map((sys) => (
+                      <div key={sys.id} className="space-y-2">
+                        <label className="block text-xs md:text-sm font-semibold text-white/80">
+                          رابط شيت {sys.name}
+                        </label>
+                        <input
+                          type="url"
+                          disabled={isPending}
+                          value={sheetUrls[sys.id] || ""}
+                          onChange={(e) =>
+                            setSheetUrls((prev) => ({
+                              ...prev,
+                              [sys.id]: e.target.value,
+                            }))
                           }
-                        }}
-                        onInput={(e) => (e.target as HTMLInputElement).setCustomValidity("")}
-                        placeholder="https://docs.google.com/spreadsheets/..."
-                        className="w-full bg-[#070814] border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent transition-all duration-300 disabled:opacity-50 text-left dir-ltr"
-                      />
-                    </div>
-
-                    {/* Sys 2 */}
-                    <div className="space-y-2">
-                      <label className="block text-xs md:text-sm font-semibold text-white/80">رابط شيت 2 Marketing Sys</label>
-                      <input
-                        type="url"
-                        disabled={isPending}
-                        value={sys2Url}
-                        onChange={(e) => setSys2Url(e.target.value)}
-                        onInvalid={(e) => {
-                          const target = e.target as HTMLInputElement;
-                          if (target.validity.typeMismatch) {
-                            target.setCustomValidity("يرجى إدخال رابط URL صحيح.");
-                          }
-                        }}
-                        onInput={(e) => (e.target as HTMLInputElement).setCustomValidity("")}
-                        placeholder="https://docs.google.com/spreadsheets/..."
-                        className="w-full bg-[#070814] border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent transition-all duration-300 disabled:opacity-50 text-left dir-ltr"
-                      />
-                    </div>
-
-                    {/* Sys 3 */}
-                    <div className="space-y-2">
-                      <label className="block text-xs md:text-sm font-semibold text-white/80">رابط شيت 3 Marketing Sys</label>
-                      <input
-                        type="url"
-                        disabled={isPending}
-                        value={sys3Url}
-                        onChange={(e) => setSys3Url(e.target.value)}
-                        onInvalid={(e) => {
-                          const target = e.target as HTMLInputElement;
-                          if (target.validity.typeMismatch) {
-                            target.setCustomValidity("يرجى إدخال رابط URL صحيح.");
-                          }
-                        }}
-                        onInput={(e) => (e.target as HTMLInputElement).setCustomValidity("")}
-                        placeholder="https://docs.google.com/spreadsheets/..."
-                        className="w-full bg-[#070814] border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent transition-all duration-300 disabled:opacity-50 text-left dir-ltr"
-                      />
-                    </div>
-
-                    {/* Sys 4 */}
-                    <div className="space-y-2">
-                      <label className="block text-xs md:text-sm font-semibold text-white/80">رابط شيت 4 Marketing Sys</label>
-                      <input
-                        type="url"
-                        disabled={isPending}
-                        value={sys4Url}
-                        onChange={(e) => setSys4Url(e.target.value)}
-                        onInvalid={(e) => {
-                          const target = e.target as HTMLInputElement;
-                          if (target.validity.typeMismatch) {
-                            target.setCustomValidity("يرجى إدخال رابط URL صحيح.");
-                          }
-                        }}
-                        onInput={(e) => (e.target as HTMLInputElement).setCustomValidity("")}
-                        placeholder="https://docs.google.com/spreadsheets/..."
-                        className="w-full bg-[#070814] border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent transition-all duration-300 disabled:opacity-50 text-left dir-ltr"
-                      />
-                    </div>
+                          onInvalid={(e) => {
+                            const target = e.target as HTMLInputElement;
+                            if (target.validity.typeMismatch) {
+                              target.setCustomValidity("يرجى إدخال رابط URL صحيح.");
+                            }
+                          }}
+                          onInput={(e) => (e.target as HTMLInputElement).setCustomValidity("")}
+                          placeholder="https://docs.google.com/spreadsheets/..."
+                          className="w-full bg-[#070814] border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent transition-all duration-300 disabled:opacity-50 text-left dir-ltr"
+                        />
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

@@ -28,6 +28,7 @@ import {
   getExpenseTransfers,
   getAgentCustodyTransfersPaginated,
 } from "@/app/actions/operations";
+import { MarketingSystem } from "@/app/actions/marketingSystems";
 
 interface LogsClientProps {
   initialFundRequests: any[];
@@ -38,6 +39,7 @@ interface LogsClientProps {
   initialEditCount: number;
   initialCustodyTransfers?: any[];
   initialTransferCount?: number;
+  marketingSystems?: MarketingSystem[];
 }
 
 type TabType = "fund-requests" | "daily-expenses" | "edit-requests" | "custody-transfers";
@@ -51,6 +53,7 @@ export default function LogsClient({
   initialEditCount = 0,
   initialCustodyTransfers = [],
   initialTransferCount = 0,
+  marketingSystems = [],
 }: LogsClientProps) {
   const [activeTab, setActiveTab] = useState<TabType>("fund-requests");
 
@@ -850,9 +853,17 @@ export default function LogsClient({
                       <th className="pb-3.5 pr-2 font-bold">تاريخ التقرير</th>
                       <th className="pb-3.5 font-bold">توتال الكاش</th>
                       <th className="pb-3.5 font-bold">إجمالي المصروفات</th>
-                      <th className="pb-3.5 font-bold">تسويق 1</th>
-                      <th className="pb-3.5 font-bold">تسويق 2</th>
-                      <th className="pb-3.5 font-bold">تسويق 3</th>
+                      {marketingSystems.length > 0 ? (
+                        marketingSystems.map((sys) => (
+                          <th key={sys.id} className="pb-3.5 font-bold">{sys.name}</th>
+                        ))
+                      ) : (
+                        <>
+                          <th className="pb-3.5 font-bold">تسويق 1</th>
+                          <th className="pb-3.5 font-bold">تسويق 2</th>
+                          <th className="pb-3.5 font-bold">تسويق 3</th>
+                        </>
+                      )}
                       <th className="pb-3.5 pl-2 font-bold">شخصي / نثريات</th>
                     </tr>
                   </thead>
@@ -872,15 +883,32 @@ export default function LogsClient({
                         <td className="py-4 font-inter text-white/90">
                           {Number(exp.total_amount).toLocaleString("en-US")}
                         </td>
-                        <td className="py-4 font-inter text-white/90">
-                          {Number(exp.marketing_1).toLocaleString("en-US")}
-                        </td>
-                        <td className="py-4 font-inter text-white/90">
-                          {Number(exp.marketing_2).toLocaleString("en-US")}
-                        </td>
-                        <td className="py-4 font-inter text-white/90">
-                          {Number(exp.marketing_3).toLocaleString("en-US")}
-                        </td>
+                        {marketingSystems.length > 0 ? (
+                          marketingSystems.map((sys) => {
+                            const val = exp.marketing_expenses?.[sys.id] ?? (
+                              sys.id === '11111111-1111-1111-1111-111111111111' ? exp.marketing_1 :
+                              sys.id === '22222222-2222-2222-2222-222222222222' ? exp.marketing_2 :
+                              sys.id === '33333333-3333-3333-3333-333333333333' ? exp.marketing_3 : 0
+                            );
+                            return (
+                              <td key={sys.id} className="py-4 font-inter text-white/90">
+                                {Number(val || 0).toLocaleString("en-US")}
+                              </td>
+                            );
+                          })
+                        ) : (
+                          <>
+                            <td className="py-4 font-inter text-white/90">
+                              {Number(exp.marketing_1).toLocaleString("en-US")}
+                            </td>
+                            <td className="py-4 font-inter text-white/90">
+                              {Number(exp.marketing_2).toLocaleString("en-US")}
+                            </td>
+                            <td className="py-4 font-inter text-white/90">
+                              {Number(exp.marketing_3).toLocaleString("en-US")}
+                            </td>
+                          </>
+                        )}
                         <td className="py-4 pl-2 font-inter text-white/90">
                           {Number(exp.personal_expense).toLocaleString("en-US")}
                         </td>
@@ -938,9 +966,25 @@ export default function LogsClient({
                               )}
                               <div>إجمالي جديد: <strong className="text-white font-inter">{changes.total_amount}</strong></div>
                               <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 mt-1 border-t border-brand-border/10 pt-1">
-                                <div>تسويق 1: <span className="font-inter">{changes.marketing_1}</span></div>
-                                <div>تسويق 2: <span className="font-inter">{changes.marketing_2}</span></div>
-                                <div>تسويق 3: <span className="font-inter">{changes.marketing_3}</span></div>
+                                {marketingSystems.length > 0 ? (
+                                  marketingSystems.map((sys) => {
+                                    const val = changes.marketing_expenses?.[sys.id] ?? (
+                                      sys.id === '11111111-1111-1111-1111-111111111111' ? changes.marketing_1 :
+                                      sys.id === '22222222-2222-2222-2222-222222222222' ? changes.marketing_2 :
+                                      sys.id === '33333333-3333-3333-3333-333333333333' ? changes.marketing_3 : undefined
+                                    );
+                                    if (val === undefined) return null;
+                                    return (
+                                      <div key={sys.id}>{sys.name}: <span className="font-inter">{val}</span></div>
+                                    );
+                                  })
+                                ) : (
+                                  <>
+                                    <div>تسويق 1: <span className="font-inter">{changes.marketing_1}</span></div>
+                                    <div>تسويق 2: <span className="font-inter">{changes.marketing_2}</span></div>
+                                    <div>تسويق 3: <span className="font-inter">{changes.marketing_3}</span></div>
+                                  </>
+                                )}
                                 <div>شخصي: <span className="font-inter">{changes.personal_expense}</span></div>
                               </div>
                             </div>
@@ -1149,29 +1193,45 @@ export default function LogsClient({
                     </div>
                   </div>
 
-                  {/* Marketing 1 */}
-                  <div className="space-y-1.5">
-                    <span className="block text-[11px] font-semibold text-brand-dim">مصاريف ماركتنج 1</span>
-                    <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
-                      {Number(selectedExpense.marketing_1 || 0).toLocaleString("en-US")}
-                    </div>
-                  </div>
-
-                  {/* Marketing 3 */}
-                  <div className="space-y-1.5">
-                    <span className="block text-[11px] font-semibold text-brand-dim">مصاريف ماركتنج 3</span>
-                    <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
-                      {Number(selectedExpense.marketing_3 || 0).toLocaleString("en-US")}
-                    </div>
-                  </div>
-
-                  {/* Marketing 2 */}
-                  <div className="space-y-1.5">
-                    <span className="block text-[11px] font-semibold text-brand-dim">مصاريف ماركتنج 2</span>
-                    <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
-                      {Number(selectedExpense.marketing_2 || 0).toLocaleString("en-US")}
-                    </div>
-                  </div>
+                  {/* Marketing Systems */}
+                  {marketingSystems.length > 0 ? (
+                    marketingSystems.map((sys) => {
+                      const val = selectedExpense.marketing_expenses?.[sys.id] ?? (
+                        sys.id === '11111111-1111-1111-1111-111111111111' ? selectedExpense.marketing_1 :
+                        sys.id === '22222222-2222-2222-2222-222222222222' ? selectedExpense.marketing_2 :
+                        sys.id === '33333333-3333-3333-3333-333333333333' ? selectedExpense.marketing_3 : 0
+                      );
+                      return (
+                        <div key={sys.id} className="space-y-1.5">
+                          <span className="block text-[11px] font-semibold text-brand-dim">{sys.name}</span>
+                          <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
+                            {Number(val || 0).toLocaleString("en-US")}
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <>
+                      <div className="space-y-1.5">
+                        <span className="block text-[11px] font-semibold text-brand-dim">مصاريف ماركتنج 1</span>
+                        <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
+                          {Number(selectedExpense.marketing_1 || 0).toLocaleString("en-US")}
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <span className="block text-[11px] font-semibold text-brand-dim">مصاريف ماركتنج 2</span>
+                        <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
+                          {Number(selectedExpense.marketing_2 || 0).toLocaleString("en-US")}
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <span className="block text-[11px] font-semibold text-brand-dim">مصاريف ماركتنج 3</span>
+                        <div className="bg-[#070814]/40 border border-brand-border/40 px-4 py-3 rounded-xl text-xs text-white/90 font-inter text-left dir-ltr">
+                          {Number(selectedExpense.marketing_3 || 0).toLocaleString("en-US")}
+                        </div>
+                      </div>
+                    </>
+                  )}
 
                   {/* Total Expenses */}
                   <div className="space-y-1.5">

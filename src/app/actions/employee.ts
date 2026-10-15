@@ -12,6 +12,7 @@ export interface EmployeeData {
   sys2Url?: string;
   sys3Url?: string;
   sys4Url?: string;
+  sheetUrls?: Record<string, string>;
 }
 
 /**
@@ -51,16 +52,24 @@ export async function addEmployee(data: EmployeeData) {
 
     const newUserId = authData.user.id;
 
+    // Prepare sheet URLs
+    const finalSheetUrls = data.sheetUrls || {};
+    const s1 = finalSheetUrls['11111111-1111-1111-1111-111111111111'] || data.sys1Url || null;
+    const s2 = finalSheetUrls['22222222-2222-2222-2222-222222222222'] || data.sys2Url || null;
+    const s3 = finalSheetUrls['33333333-3333-3333-3333-333333333333'] || data.sys3Url || null;
+    const s4 = data.sys4Url || null;
+
     // 2. Insert user profile into public.profiles
     const { error: insertError } = await supabaseAdmin.from("profiles").insert({
       id: newUserId,
       email: data.email,
       full_name: data.fullName,
       role: data.role,
-      sys1_url: data.sys1Url || null,
-      sys2_url: data.sys2Url || null,
-      sys3_url: data.sys3Url || null,
-      sys4_url: data.sys4Url || null,
+      sheet_urls: finalSheetUrls,
+      sys1_url: s1,
+      sys2_url: s2,
+      sys3_url: s3,
+      sys4_url: s4,
       created_by: adminUser.id,
       is_active: true,
     });
@@ -131,6 +140,18 @@ export async function updateEmployee(
     const updateData: any = {};
     if (data.fullName !== undefined) updateData.full_name = data.fullName;
     if (data.role !== undefined) updateData.role = updatedRole;
+    if (data.sheetUrls !== undefined) {
+      updateData.sheet_urls = data.sheetUrls;
+      if (data.sheetUrls['11111111-1111-1111-1111-111111111111'] !== undefined) {
+        updateData.sys1_url = data.sheetUrls['11111111-1111-1111-1111-111111111111'] || null;
+      }
+      if (data.sheetUrls['22222222-2222-2222-2222-222222222222'] !== undefined) {
+        updateData.sys2_url = data.sheetUrls['22222222-2222-2222-2222-222222222222'] || null;
+      }
+      if (data.sheetUrls['33333333-3333-3333-3333-333333333333'] !== undefined) {
+        updateData.sys3_url = data.sheetUrls['33333333-3333-3333-3333-333333333333'] || null;
+      }
+    }
     if (data.sys1Url !== undefined) updateData.sys1_url = data.sys1Url || null;
     if (data.sys2Url !== undefined) updateData.sys2_url = data.sys2Url || null;
     if (data.sys3Url !== undefined) updateData.sys3_url = data.sys3Url || null;

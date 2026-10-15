@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabaseServer";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { getPendingEditRequests } from "@/app/actions/adminOperations";
+import { getMarketingSystems } from "@/app/actions/marketingSystems";
 import EditRequestsClient from "./EditRequestsClient";
 
 export const dynamic = "force-dynamic";
@@ -51,8 +52,11 @@ export default async function EditRequestsManagementPage() {
     redirect("/dashboard?error=unauthorized");
   }
 
-  // 3. Fetch initial pending requests and agents list
-  const dataRes = await getPendingEditRequests();
+  // 3. Fetch initial pending requests, agents list, and marketing systems
+  const [dataRes, marketingSystems] = await Promise.all([
+    getPendingEditRequests(),
+    getMarketingSystems(),
+  ]);
   
   if (!dataRes.success) {
     console.error("Error fetching edit requests in page wrapper:", dataRes.error);
@@ -68,6 +72,7 @@ export default async function EditRequestsManagementPage() {
     <EditRequestsClient
       initialRequests={dataRes.requests || []}
       initialAgents={dataRes.agents || []}
+      marketingSystems={marketingSystems}
     />
   );
 }

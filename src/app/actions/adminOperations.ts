@@ -45,6 +45,7 @@ export interface EditExpenseRequestData {
   status: "pending" | "approved" | "rejected";
   requested_changes: {
     total_amount: number;
+    marketing_expenses?: Record<string, number>;
     marketing_1: number;
     marketing_2: number;
     marketing_3: number;
@@ -70,6 +71,7 @@ export interface EditExpenseRequestData {
     agent_id: string;
     expense_date: string;
     personal_expense: number;
+    marketing_expenses?: Record<string, number>;
     marketing_1: number;
     marketing_2: number;
     marketing_3: number;
@@ -681,6 +683,7 @@ export async function reviewEditRequest(
         .from("daily_expenses")
         .update({
           total_amount: Number(newChanges.total_amount),
+          marketing_expenses: newChanges.marketing_expenses || {},
           marketing_1: Number(newChanges.marketing_1) || 0,
           marketing_2: Number(newChanges.marketing_2) || 0,
           marketing_3: Number(newChanges.marketing_3) || 0,
@@ -1035,6 +1038,7 @@ export async function getAdminDailyExpensesPaginated(params: {
       id: exp.id,
       expense_date: exp.expense_date,
       total_amount: exp.total_amount,
+      marketing_expenses: exp.marketing_expenses || {},
       marketing_1: exp.marketing_1,
       marketing_2: exp.marketing_2,
       marketing_3: exp.marketing_3,

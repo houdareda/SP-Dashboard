@@ -55,5 +55,19 @@ export default async function AgentsPage() {
     console.error("Error fetching profiles:", error);
   }
 
-  return <AgentsClient initialProfiles={initialProfiles || []} />;
+  // Fetch active marketing systems
+  const { data: systemsData } = await supabaseAdmin
+    .from("marketing_systems")
+    .select("id, name, order_index")
+    .eq("is_active", true)
+    .order("order_index", { ascending: true });
+
+  const marketingSystems = systemsData || [];
+
+  return (
+    <AgentsClient
+      initialProfiles={initialProfiles || []}
+      marketingSystems={marketingSystems}
+    />
+  );
 }

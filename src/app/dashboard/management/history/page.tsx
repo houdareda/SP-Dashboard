@@ -8,6 +8,7 @@ import {
   getAdminEditRequestsPaginated,
   getAdminCustodyTransfersPaginated,
 } from "@/app/actions/adminOperations";
+import { getMarketingSystems } from "@/app/actions/marketingSystems";
 import HistoryClient from "./HistoryClient";
 
 export const dynamic = "force-dynamic";
@@ -35,11 +36,14 @@ export default async function HistoryManagementPage() {
     redirect("/dashboard?error=unauthorized");
   }
 
-  // 3. Fetch initial paginated data for admin/senior
-  const fundRes = await getAdminFundRequestsPaginated({ page: 1, limit: 20 });
-  const expenseRes = await getAdminDailyExpensesPaginated({ page: 1, limit: 20 });
-  const editRes = await getAdminEditRequestsPaginated({ page: 1, limit: 20 });
-  const transferRes = await getAdminCustodyTransfersPaginated({ page: 1, limit: 20 });
+  // 3. Fetch initial paginated data for admin/senior and marketing systems
+  const [fundRes, expenseRes, editRes, transferRes, marketingSystems] = await Promise.all([
+    getAdminFundRequestsPaginated({ page: 1, limit: 20 }),
+    getAdminDailyExpensesPaginated({ page: 1, limit: 20 }),
+    getAdminEditRequestsPaginated({ page: 1, limit: 20 }),
+    getAdminCustodyTransfersPaginated({ page: 1, limit: 20 }),
+    getMarketingSystems(),
+  ]);
 
   // 4. Fetch all active employees (agents/senior agents) for filters
   const { data: employees } = await supabaseAdmin
@@ -60,6 +64,7 @@ export default async function HistoryManagementPage() {
       initialCustodyTransfers={transferRes.success && transferRes.data ? transferRes.data : []}
       initialTransferCount={transferRes.success && transferRes.totalCount !== undefined ? transferRes.totalCount : 0}
       employees={employees || []}
+      marketingSystems={marketingSystems}
     />
   );
 }
