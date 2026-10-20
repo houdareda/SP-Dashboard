@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabaseServer";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { supabaseAdmin, fetchAllRows } from "@/lib/supabaseAdmin";
 import { revalidatePath } from "next/cache";
 
 export interface AdminFundRequest {
@@ -1200,44 +1200,6 @@ export async function getAgentsCustodyReport(params: {
 
     const profileIds = profiles.map((p) => p.id);
 
-    // 3. Fetch wallets
-    let walletsQuery = supabaseAdmin
-      .from("wallets")
-      .select("id, phone_number, start_of_month_balance, agent_id, is_active");
-    if (params.walletSearch) {
-      walletsQuery = walletsQuery.ilike("phone_number", `%${params.walletSearch}%`);
-    }
-    const { data: wallets, error: walletsErr } = await walletsQuery.in("agent_id", profileIds);
-    if (walletsErr) throw walletsErr;
-
-    const matchedWallets = wallets || [];
-
-    // 4. Fetch all-time fund requests
-    const { data: fundRequestsAll, error: fundErr } = await supabaseAdmin
-      .from("fund_requests")
-      .select("agent_id, wallet_id, status, amount_requested, amount_approved, request_date")
-      .in("agent_id", profileIds);
-    if (fundErr) throw fundErr;
-
-    const matchedRequests = fundRequestsAll || [];
-
-    // 5. Fetch all-time daily expenses
-    const { data: expensesAll, error: expErr } = await supabaseAdmin
-      .from("daily_expenses")
-      .select("agent_id, total_amount, marketing_1, marketing_2, marketing_3, personal_expense, expense_date")
-      .in("agent_id", profileIds);
-    if (expErr) throw expErr;
-
-    const matchedExpenses = expensesAll || [];
-
-    // 6. Fetch all-time transfers
-    const { data: transfersAll, error: transErr } = await supabaseAdmin
-      .from("expense_transfers")
-      .select("from_agent_id, to_agent_id, amount");
-    if (transErr) throw transErr;
-
-    const matchedTransfers = transfersAll || [];
-
     // Determine current month bounds for wallet monthly balance calculation
     const formatter = new Intl.DateTimeFormat("en-US", {
       timeZone: "Asia/Riyadh",
@@ -1250,6 +1212,34 @@ export async function getAgentsCustodyReport(params: {
     const startOfMonth = `${currYear}-${currMonth}-01`;
     const lastDay = new Date(Number(currYear), Number(currMonth), 0).getDate();
     const endOfMonth = `${currYear}-${currMonth}-${String(lastDay).padStart(2, "0")}`;
+
+    // Parallel fetch: wallets, fundRequestsAll, expensesAll, transfersAll with zero 1000-row cutoff
+    let walletsQuery = supabaseAdmin
+      .from("wallets")
+      .select("id, phone_number, start_of_month_balance, agent_id, is_active");
+    if (params.walletSearch) {
+      walletsQuery = walletsQuery.ilike("phone_number", `%${params.walletSearch}%`);
+    }
+
+    const [walletsRes, matchedRequests, matchedExpenses, matchedTransfers] = await Promise.all([
+      walletsQuery.in("agent_id", profileIds),
+      fetchAllRows(
+        "fund_requests",
+        "agent_id, wallet_id, status, amount_requested, amount_approved, request_date",
+        (q) => q.in("agent_id", profileIds)
+      ),
+      fetchAllRows(
+        "daily_expenses",
+        "agent_id, total_amount, marketing_expenses, marketing_1, marketing_2, marketing_3, personal_expense, expense_date",
+        (q) => q.in("agent_id", profileIds)
+      ),
+      fetchAllRows(
+        "expense_transfers",
+        "from_agent_id, to_agent_id, amount"
+      ),
+    ]);
+
+    const matchedWallets = walletsRes.data || [];
 
     // 7. Calculate in-memory summaries per agent
     const agentsList: any[] = [];
@@ -1277,9 +1267,19 @@ export async function getAgentsCustodyReport(params: {
         .filter((r) => r.agent_id === p.id && r.status === "pending")
         .reduce((sum, r) => sum + (Number(r.amount_requested) || 0), 0);
 
-      const expensesTotalSum = matchedExpenses
+      // Pure expenses (personal + all marketing systems)
+      const pureExpensesSum = matchedExpenses
         .filter((e) => e.agent_id === p.id)
-        .reduce((sum, e) => sum + (Number(e.total_amount) || 0), 0);
+        .reduce((sum, e: any) => {
+          const pers = Number(e.personal_expense) || 0;
+          let mSum = 0;
+          if (e.marketing_expenses && Object.keys(e.marketing_expenses).length > 0) {
+            mSum = Object.values(e.marketing_expenses).reduce((a: number, b: any) => a + (Number(b) || 0), 0);
+          } else {
+            mSum = (Number(e.marketing_1) || 0) + (Number(e.marketing_2) || 0) + (Number(e.marketing_3) || 0);
+          }
+          return sum + pers + mSum;
+        }, 0);
 
       const sentTransfersSum = matchedTransfers
         .filter((t) => t.from_agent_id === p.id)
@@ -1289,7 +1289,8 @@ export async function getAgentsCustodyReport(params: {
         .filter((t) => t.to_agent_id === p.id)
         .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
 
-      const custodyCurrent = (approvedFundsSum + receivedTransfersSum) - (expensesTotalSum + sentTransfersSum);
+      // Current custody = (Approved Funds + Received Transfers) - (Pure Expenses + Sent Transfers)
+      const custodyCurrent = (approvedFundsSum + receivedTransfersSum) - (pureExpensesSum + sentTransfersSum);
 
       // Period sums
       const approvedFundsPeriod = matchedRequests
@@ -1298,7 +1299,16 @@ export async function getAgentsCustodyReport(params: {
 
       const expensesPeriod = matchedExpenses
         .filter((e) => e.agent_id === p.id && (!params.startDate || e.expense_date >= params.startDate) && (!params.endDate || e.expense_date <= params.endDate))
-        .reduce((sum, e) => sum + (Number(e.total_amount) || 0), 0);
+        .reduce((sum, e: any) => {
+          const pers = Number(e.personal_expense) || 0;
+          let mSum = 0;
+          if (e.marketing_expenses && Object.keys(e.marketing_expenses).length > 0) {
+            mSum = Object.values(e.marketing_expenses).reduce((a: number, b: any) => a + (Number(b) || 0), 0);
+          } else {
+            mSum = (Number(e.marketing_1) || 0) + (Number(e.marketing_2) || 0) + (Number(e.marketing_3) || 0);
+          }
+          return sum + pers + mSum;
+        }, 0);
 
       // Map wallets with current calculated monthly balances
       const walletsData = agentWallets.map((w) => {
@@ -1335,7 +1345,7 @@ export async function getAgentsCustodyReport(params: {
         wallets: walletsData,
         allTimeApprovedFunds: approvedFundsSum,
         allTimePendingFunds: pendingFundsSum,
-        allTimeExpenses: expensesTotalSum,
+        allTimeExpenses: pureExpensesSum,
         allTimeTransfersSent: sentTransfersSum,
         allTimeTransfersReceived: receivedTransfersSum,
         currentCustody: custodyCurrent,

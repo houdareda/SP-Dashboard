@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabaseServer";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { supabaseAdmin, fetchAllRows } from "@/lib/supabaseAdmin";
 
 export interface DashboardOverviewData {
   success: boolean;
@@ -179,91 +179,20 @@ export async function getDashboardOverview(params: {
     const startDate = params.startDate || currentMonthStart;
     const endDate = params.endDate || currentMonthEnd;
 
-    // Fetch marketing systems for dynamic breakdown
-    const { data: mSystems } = await supabaseAdmin
-      .from("marketing_systems")
-      .select("id, name, display_order")
-      .order("display_order", { ascending: true });
-    const marketingSystems = mSystems || [];
+    // Calculate current month's bounds to query wallet calculated balances
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Riyadh",
+      year: "numeric",
+      month: "2-digit",
+    });
+    const parts = formatter.formatToParts(new Date());
+    const currYear = parts.find((p) => p.type === "year")?.value;
+    const currMonth = parts.find((p) => p.type === "month")?.value;
+    const startOfMonth = `${currYear}-${currMonth}-01`;
+    const lastDay = new Date(Number(currYear), Number(currMonth), 0).getDate();
+    const endOfMonth = `${currYear}-${currMonth}-${String(lastDay).padStart(2, "0")}`;
 
-    // --- QUERY 1: Fetch Daily Expenses in current month (for Monthly Expenses card & charts) ---
-    const { data: expensesCurrentMonth, error: expError } = await supabaseAdmin
-      .from("daily_expenses")
-      .select("id, total_amount, marketing_expenses, marketing_1, marketing_2, marketing_3, personal_expense, expense_date, agent_id")
-      .in("agent_id", targetAgentIds)
-      .gte("expense_date", currentMonthStart)
-      .lte("expense_date", currentMonthEnd);
-
-    if (expError) {
-      console.error("Dashboard overview daily_expenses query error:", expError);
-    }
-
-    // --- QUERY 2: Fetch current month Transfers Sent (for Monthly Expenses card) ---
-    const currentMonthExpenseIds = (expensesCurrentMonth || []).map((e) => e.id);
-    let sentTransfersCurrentMonth: any[] = [];
-    if (currentMonthExpenseIds.length > 0) {
-      const { data: transfers } = await supabaseAdmin
-        .from("expense_transfers")
-        .select("amount, from_agent_id, to_agent_id, expense_id")
-        .in("expense_id", currentMonthExpenseIds);
-
-      if (transfers) {
-        sentTransfersCurrentMonth = transfers.filter(
-          (t) => targetAgentIds.includes(t.from_agent_id)
-        );
-      }
-    }
-
-    // --- QUERY 3: Fetch all-time Daily Expenses (for Custody total) ---
-    const { data: expensesAllTime } = await supabaseAdmin
-      .from("daily_expenses")
-      .select("id, personal_expense, marketing_expenses, marketing_1, marketing_2, marketing_3")
-      .in("agent_id", targetAgentIds);
-
-    const personalAllTime = (expensesAllTime || []).reduce((sum, e) => sum + (Number(e.personal_expense) || 0), 0);
-    const marketingAllTime = (expensesAllTime || []).reduce((sum, e: any) => {
-      if (e.marketing_expenses && Object.keys(e.marketing_expenses).length > 0) {
-        const mSum = Object.values(e.marketing_expenses).reduce((a: number, b: any) => a + (Number(b) || 0), 0);
-        return sum + mSum;
-      }
-      return sum + (Number(e.marketing_1) || 0) + (Number(e.marketing_2) || 0) + (Number(e.marketing_3) || 0);
-    }, 0);
-    const expensesTotalSum = personalAllTime + marketingAllTime;
-
-    // --- QUERY 4: Fetch all-time Transfers Sent & Received (for Custody total) ---
-    const { data: transfersAllTime } = await supabaseAdmin
-      .from("expense_transfers")
-      .select("amount, from_agent_id, to_agent_id");
-
-    let sentCustodySum = 0;
-    let receivedCustodySum = 0;
-
-    if (transfersAllTime) {
-      transfersAllTime.forEach((t) => {
-        if (targetAgentIds.includes(t.from_agent_id)) {
-          sentCustodySum += Number(t.amount) || 0;
-        }
-        if (targetAgentIds.includes(t.to_agent_id)) {
-          receivedCustodySum += Number(t.amount) || 0;
-        }
-      });
-    }
-
-    // --- QUERY 5: Fetch all-time Fund Requests (for Custody total) ---
-    const { data: fundRequestsAllTime } = await supabaseAdmin
-      .from("fund_requests")
-      .select("status, amount_requested, amount_approved")
-      .in("agent_id", targetAgentIds);
-
-    const approvedFundsSum = (fundRequestsAllTime || [])
-      .filter((req) => req.status === "approved")
-      .reduce((sum, req) => sum + (Number(req.amount_approved) || 0), 0);
-
-    const pendingFundsSum = (fundRequestsAllTime || [])
-      .filter((req) => req.status === "pending")
-      .reduce((sum, req) => sum + (Number(req.amount_requested) || 0), 0);
-
-    // --- QUERY 6: Fetch active wallets of targeted agent(s) ---
+    // --- PARALLEL QUERIES: Fetch all dashboard data concurrently with no row cutoff ---
     let walletsQuery = supabaseAdmin
       .from("wallets")
       .select(`
@@ -280,39 +209,97 @@ export async function getDashboardOverview(params: {
       walletsQuery = walletsQuery.in("agent_id", targetAgentIds);
     }
 
-    const { data: wallets } = await walletsQuery;
+    const [
+      mSystemsRes,
+      expensesCurrentMonth,
+      expensesAllTime,
+      transfersAllTime,
+      fundRequestsAllTime,
+      walletsRes,
+    ] = await Promise.all([
+      supabaseAdmin
+        .from("marketing_systems")
+        .select("id, name, order_index")
+        .order("order_index", { ascending: true }),
+      fetchAllRows(
+        "daily_expenses",
+        "id, total_amount, marketing_expenses, marketing_1, marketing_2, marketing_3, personal_expense, expense_date, agent_id",
+        (q) => q.in("agent_id", targetAgentIds).gte("expense_date", currentMonthStart).lte("expense_date", currentMonthEnd)
+      ),
+      fetchAllRows(
+        "daily_expenses",
+        "id, personal_expense, marketing_expenses, marketing_1, marketing_2, marketing_3",
+        (q) => q.in("agent_id", targetAgentIds)
+      ),
+      fetchAllRows(
+        "expense_transfers",
+        "amount, from_agent_id, to_agent_id, expense_id"
+      ),
+      fetchAllRows(
+        "fund_requests",
+        "wallet_id, status, amount_requested, amount_approved, request_date",
+        (q) => q.in("agent_id", targetAgentIds)
+      ),
+      walletsQuery,
+    ]);
 
-    // Calculate current month's bounds to query wallet calculated balances
-    const formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Riyadh",
-      year: "numeric",
-      month: "2-digit",
+    const marketingSystems = mSystemsRes.data || [];
+    const wallets = walletsRes.data || [];
+
+    // Filter current month sent transfers in memory using fetched expense IDs
+    const currentMonthExpenseIdsSet = new Set((expensesCurrentMonth || []).map((e) => e.id));
+    const sentTransfersCurrentMonth = (transfersAllTime || []).filter(
+      (t) => currentMonthExpenseIdsSet.has(t.expense_id) && targetAgentIds.includes(t.from_agent_id)
+    );
+
+    // Calculate all-time pure expenses
+    const personalAllTime = (expensesAllTime || []).reduce((sum, e) => sum + (Number(e.personal_expense) || 0), 0);
+    const marketingAllTime = (expensesAllTime || []).reduce((sum, e: any) => {
+      if (e.marketing_expenses && Object.keys(e.marketing_expenses).length > 0) {
+        const mSum = Object.values(e.marketing_expenses).reduce((a: number, b: any) => a + (Number(b) || 0), 0);
+        return sum + mSum;
+      }
+      return sum + (Number(e.marketing_1) || 0) + (Number(e.marketing_2) || 0) + (Number(e.marketing_3) || 0);
+    }, 0);
+    const expensesTotalSum = personalAllTime + marketingAllTime;
+
+    // Calculate all-time transfers sent & received
+    let sentCustodySum = 0;
+    let receivedCustodySum = 0;
+
+    (transfersAllTime || []).forEach((t) => {
+      if (targetAgentIds.includes(t.from_agent_id)) {
+        sentCustodySum += Number(t.amount) || 0;
+      }
+      if (targetAgentIds.includes(t.to_agent_id)) {
+        receivedCustodySum += Number(t.amount) || 0;
+      }
     });
-    const parts = formatter.formatToParts(new Date());
-    const currYear = parts.find((p) => p.type === "year")?.value;
-    const currMonth = parts.find((p) => p.type === "month")?.value;
 
+    // Calculate all-time fund requests
+    const approvedFundsSum = (fundRequestsAllTime || [])
+      .filter((req) => req.status === "approved")
+      .reduce((sum, req) => sum + (Number(req.amount_approved) || 0), 0);
+
+    const pendingFundsSum = (fundRequestsAllTime || [])
+      .filter((req) => req.status === "pending")
+      .reduce((sum, req) => sum + (Number(req.amount_requested) || 0), 0);
+
+    // Calculate wallet monthly balances in memory using fundRequestsAllTime
     let walletCalculatedList: any[] = [];
     let totalCashInWallets = 0;
 
     if (wallets && wallets.length > 0 && currYear && currMonth) {
-      const startOfMonth = `${currYear}-${currMonth}-01`;
-      const lastDay = new Date(Number(currYear), Number(currMonth), 0).getDate();
-      const endOfMonth = `${currYear}-${currMonth}-${String(lastDay).padStart(2, "0")}`;
-
-      const walletIds = wallets.map((w) => w.id);
-      const { data: approvedRequests } = await supabaseAdmin
-        .from("fund_requests")
-        .select("wallet_id, amount_approved")
-        .eq("status", "approved")
-        .in("wallet_id", walletIds)
-        .gte("request_date", startOfMonth)
-        .lte("request_date", endOfMonth);
-
       walletCalculatedList = wallets.map((w) => {
         const starting = Number(w.start_of_month_balance) || 0;
-        const approvedSum = (approvedRequests || [])
-          .filter((req) => req.wallet_id === w.id)
+        const approvedSum = (fundRequestsAllTime || [])
+          .filter(
+            (req) =>
+              req.wallet_id === w.id &&
+              req.status === "approved" &&
+              req.request_date >= startOfMonth &&
+              req.request_date <= endOfMonth
+          )
           .reduce((sum, req) => sum + (Number(req.amount_approved) || 0), 0);
         const currentBalance = starting + approvedSum;
         totalCashInWallets += currentBalance;
