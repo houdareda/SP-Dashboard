@@ -294,7 +294,7 @@ export default function EditRequestsClient({
   };
 
   return (
-    <div className="space-y-8 font-cairo select-none relative text-right w-full" dir="rtl">
+    <div className="space-y-8 font-cairo relative text-right w-full" dir="rtl">
       {/* Toast Notification */}
       {toast && (
         <div
@@ -335,7 +335,7 @@ export default function EditRequestsClient({
                   setIsAgentDropdownOpen(!isAgentDropdownOpen);
                   setIsSortDropdownOpen(false);
                 }}
-                className={`w-full h-[46px] px-4 rounded-xl bg-[#070912] border transition-all cursor-pointer flex items-center justify-between select-none ${
+                className={`w-full h-[46px] px-4 rounded-xl bg-[#070912] border transition-all cursor-pointer flex items-center justify-between ${
                   isAgentDropdownOpen ? "border-brand-accent shadow-[0_0_10px_rgba(139,92,246,0.2)]" : "border-brand-border/80"
                 }`}
               >
@@ -431,7 +431,7 @@ export default function EditRequestsClient({
                   <Calendar size={13} />
                 </span>
               </div>
-              <span className="text-brand-dim text-xs select-none">إلى</span>
+              <span className="text-brand-dim text-xs">إلى</span>
               <div className="relative flex-1">
                 <input
                   type="date"
@@ -459,7 +459,7 @@ export default function EditRequestsClient({
                   setIsSortDropdownOpen(!isSortDropdownOpen);
                   setIsAgentDropdownOpen(false);
                 }}
-                className={`w-full h-[46px] px-4 rounded-xl bg-[#070912] border transition-all cursor-pointer flex items-center justify-between select-none ${
+                className={`w-full h-[46px] px-4 rounded-xl bg-[#070912] border transition-all cursor-pointer flex items-center justify-between ${
                   isSortDropdownOpen ? "border-brand-accent shadow-[0_0_10px_rgba(139,92,246,0.2)]" : "border-brand-border/80"
                 }`}
               >
@@ -507,7 +507,7 @@ export default function EditRequestsClient({
       </div>
 
       {/* Statistics Counter */}
-      <div className="flex items-center justify-between select-none">
+      <div className="flex items-center justify-between">
         <span className="text-xs text-brand-dim font-semibold">
           عدد الطلبات المعروضة: <span className="text-brand-accent font-bold text-sm font-inter">{filteredRequests.length}</span>
         </span>
@@ -528,12 +528,12 @@ export default function EditRequestsClient({
                 {/* Card Header Section */}
                 <div
                   onClick={() => toggleExpand(req.id)}
-                  className={`flex flex-col md:flex-row justify-between items-start md:items-center gap-4 select-none cursor-pointer hover:opacity-90 transition-all ${
+                  className={`flex flex-col md:flex-row justify-between items-start md:items-center gap-4 cursor-pointer hover:opacity-90 transition-all ${
                     isExpanded ? "border-b border-brand-border/20 pb-4" : ""
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center text-brand-accent shrink-0 select-none">
+                    <div className="w-10 h-10 rounded-xl bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center text-brand-accent shrink-0">
                       <User size={18} />
                     </div>
                     <div className="text-right space-y-0.5">
@@ -545,7 +545,7 @@ export default function EditRequestsClient({
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-amber-400 bg-amber-400/10 border border-amber-400/25 rounded-full select-none">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-amber-400 bg-amber-400/10 border border-amber-400/25 rounded-full">
                       <Clock size={12} />
                       <span>قيد الانتظار</span>
                     </span>
@@ -578,12 +578,12 @@ export default function EditRequestsClient({
                   
                   {/* Column 1 (Right): Current Base Report Details */}
                   <div className="bg-[#070814]/30 border border-brand-border/40 p-5 rounded-2xl space-y-4">
-                    <h5 className="text-[13px] font-bold text-brand-dim border-b border-brand-border/20 pb-2 select-none">
+                    <h5 className="text-[13px] font-bold text-brand-dim border-b border-brand-border/20 pb-2">
                       | البيانات الحالية (التقرير الأصلي)
                     </h5>
                     <div className="space-y-3.5 text-xs md:text-sm">
                       <div className="flex justify-between items-center">
-                        <span className="text-brand-dim select-none">المصاريف الشخصية</span>
+                        <span className="text-brand-dim">المصاريف الشخصية</span>
                         <span className="font-semibold text-white font-inter">{(req.expense?.personal_expense || 0).toLocaleString("en-US")}</span>
                       </div>
                       {marketingSystems.length > 0 ? (
@@ -595,7 +595,7 @@ export default function EditRequestsClient({
                           );
                           return (
                             <div key={sys.id} className="flex justify-between items-center">
-                              <span className="text-brand-dim select-none">{sys.name}</span>
+                              <span className="text-brand-dim">{sys.name}</span>
                               <span className="font-semibold text-white font-inter">{Number(origVal).toLocaleString("en-US")}</span>
                             </div>
                           );
@@ -603,25 +603,25 @@ export default function EditRequestsClient({
                       ) : (
                         <>
                           <div className="flex justify-between items-center">
-                            <span className="text-brand-dim select-none">مصاريف ماركتنج 1</span>
+                            <span className="text-brand-dim">مصاريف ماركتنج 1</span>
                             <span className="font-semibold text-white font-inter">{(req.expense?.marketing_1 || 0).toLocaleString("en-US")}</span>
                           </div>
                           <div className="flex justify-between items-center">
-                            <span className="text-brand-dim select-none">مصاريف ماركتنج 2</span>
+                            <span className="text-brand-dim">مصاريف ماركتنج 2</span>
                             <span className="font-semibold text-white font-inter">{(req.expense?.marketing_2 || 0).toLocaleString("en-US")}</span>
                           </div>
                           <div className="flex justify-between items-center">
-                            <span className="text-brand-dim select-none">مصاريف ماركتنج 3</span>
+                            <span className="text-brand-dim">مصاريف ماركتنج 3</span>
                             <span className="font-semibold text-white font-inter">{(req.expense?.marketing_3 || 0).toLocaleString("en-US")}</span>
                           </div>
                         </>
                       )}
                       <div className="flex justify-between items-center border-t border-brand-border/20 pt-2.5 font-bold">
-                        <span className="text-white select-none">إجمالي مصروفات المحفظة</span>
+                        <span className="text-white">إجمالي مصروفات المحفظة</span>
                         <span className="text-brand-accent text-sm font-inter">{(req.expense?.total_amount || 0).toLocaleString("en-US")}</span>
                       </div>
                       <div className="flex justify-between items-center border-t border-brand-border/10 pt-2 font-semibold">
-                        <span className="text-brand-dim select-none">توتال الكاش</span>
+                        <span className="text-brand-dim">توتال الكاش</span>
                         <span className="text-white font-inter">{(req.expense?.total_cash || 0).toLocaleString("en-US")}</span>
                       </div>
                     </div>
@@ -629,16 +629,16 @@ export default function EditRequestsClient({
 
                   {/* Column 2 (Left): Proposed Modifications Details */}
                   <div className="bg-[#070814]/30 border border-brand-border/40 p-5 rounded-2xl space-y-4">
-                    <h5 className="text-[13px] font-bold text-brand-dim border-b border-brand-border/20 pb-2 select-none">
+                    <h5 className="text-[13px] font-bold text-brand-dim border-b border-brand-border/20 pb-2">
                       | البيانات المقترحة (طلب التعديل)
                     </h5>
                     <div className="space-y-3.5 text-xs md:text-sm">
                       
                       {/* Personal Expense Check */}
                       <div className="flex justify-between items-center">
-                        <span className="text-brand-dim select-none">المصاريف الشخصية</span>
+                        <span className="text-brand-dim">المصاريف الشخصية</span>
                         {req.requested_changes.personal_expense === req.expense?.personal_expense ? (
-                          <span className="text-brand-dim/50 text-[11px] font-medium select-none">لا يوجد تغيير</span>
+                          <span className="text-brand-dim/50 text-[11px] font-medium">لا يوجد تغيير</span>
                         ) : (
                           <span className="font-bold font-inter flex items-center gap-1.5">
                             <span className="text-brand-accent">{(req.requested_changes.personal_expense || 0).toLocaleString("en-US")}</span>
@@ -664,9 +664,9 @@ export default function EditRequestsClient({
                           const hasChanged = Number(propVal) !== Number(origVal);
                           return (
                             <div key={sys.id} className="flex justify-between items-center">
-                              <span className="text-brand-dim select-none">{sys.name}</span>
+                              <span className="text-brand-dim">{sys.name}</span>
                               {!hasChanged ? (
-                                <span className="text-brand-dim/50 text-[11px] font-medium select-none">لا يوجد تغيير</span>
+                                <span className="text-brand-dim/50 text-[11px] font-medium">لا يوجد تغيير</span>
                               ) : (
                                 <span className="font-bold font-inter flex items-center gap-1.5">
                                   <span className="text-brand-accent">{Number(propVal).toLocaleString("en-US")}</span>
@@ -680,9 +680,9 @@ export default function EditRequestsClient({
                       ) : (
                         <>
                           <div className="flex justify-between items-center">
-                            <span className="text-brand-dim select-none">مصاريف ماركتنج 1</span>
+                            <span className="text-brand-dim">مصاريف ماركتنج 1</span>
                             {req.requested_changes.marketing_1 === req.expense?.marketing_1 ? (
-                              <span className="text-brand-dim/50 text-[11px] font-medium select-none">لا يوجد تغيير</span>
+                              <span className="text-brand-dim/50 text-[11px] font-medium">لا يوجد تغيير</span>
                             ) : (
                               <span className="font-bold font-inter flex items-center gap-1.5">
                                 <span className="text-brand-accent">{(req.requested_changes.marketing_1 || 0).toLocaleString("en-US")}</span>
@@ -693,9 +693,9 @@ export default function EditRequestsClient({
                           </div>
 
                           <div className="flex justify-between items-center">
-                            <span className="text-brand-dim select-none">مصاريف ماركتنج 2</span>
+                            <span className="text-brand-dim">مصاريف ماركتنج 2</span>
                             {req.requested_changes.marketing_2 === req.expense?.marketing_2 ? (
-                              <span className="text-brand-dim/50 text-[11px] font-medium select-none">لا يوجد تغيير</span>
+                              <span className="text-brand-dim/50 text-[11px] font-medium">لا يوجد تغيير</span>
                             ) : (
                               <span className="font-bold font-inter flex items-center gap-1.5">
                                 <span className="text-brand-accent">{(req.requested_changes.marketing_2 || 0).toLocaleString("en-US")}</span>
@@ -706,9 +706,9 @@ export default function EditRequestsClient({
                           </div>
 
                           <div className="flex justify-between items-center">
-                            <span className="text-brand-dim select-none">مصاريف ماركتنج 3</span>
+                            <span className="text-brand-dim">مصاريف ماركتنج 3</span>
                             {req.requested_changes.marketing_3 === req.expense?.marketing_3 ? (
-                              <span className="text-brand-dim/50 text-[11px] font-medium select-none">لا يوجد تغيير</span>
+                              <span className="text-brand-dim/50 text-[11px] font-medium">لا يوجد تغيير</span>
                             ) : (
                               <span className="font-bold font-inter flex items-center gap-1.5">
                                 <span className="text-brand-accent">{(req.requested_changes.marketing_3 || 0).toLocaleString("en-US")}</span>
@@ -722,7 +722,7 @@ export default function EditRequestsClient({
 
                       {/* Total Amount Check */}
                       <div className="flex justify-between items-center border-t border-brand-border/20 pt-2.5 font-bold">
-                        <span className="text-white select-none">إجمالي مصروفات المحفظة</span>
+                        <span className="text-white">إجمالي مصروفات المحفظة</span>
                         {req.requested_changes.total_amount === req.expense?.total_amount ? (
                           <span className="text-brand-accent text-sm font-inter">{(req.expense?.total_amount || 0).toLocaleString("en-US")}</span>
                         ) : (
@@ -736,9 +736,9 @@ export default function EditRequestsClient({
 
                       {/* Total Cash Check */}
                       <div className="flex justify-between items-center border-t border-brand-border/10 pt-2">
-                        <span className="text-brand-dim select-none">توتال الكاش المقترح</span>
+                        <span className="text-brand-dim">توتال الكاش المقترح</span>
                         {req.requested_changes.total_cash === req.expense?.total_cash || req.requested_changes.total_cash === undefined ? (
-                          <span className="text-brand-dim/50 text-[11px] font-medium select-none">لا يوجد تغيير</span>
+                          <span className="text-brand-dim/50 text-[11px] font-medium">لا يوجد تغيير</span>
                         ) : (
                           <span className="font-bold font-inter flex items-center gap-1.5">
                             <span className="text-brand-accent">{(req.requested_changes.total_cash || 0).toLocaleString("en-US")}</span>
@@ -775,7 +775,7 @@ export default function EditRequestsClient({
 
                   return (
                     <div className="bg-[#070814]/30 border border-brand-border/40 p-5 rounded-2xl space-y-3">
-                      <h5 className="text-[13px] font-bold text-brand-dim border-b border-brand-border/20 pb-2 select-none">
+                      <h5 className="text-[13px] font-bold text-brand-dim border-b border-brand-border/20 pb-2">
                         | مقارنة أرصدة كاش المحافظ والكامبين
                       </h5>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -810,7 +810,7 @@ export default function EditRequestsClient({
 
                 {/* Custody Transfers Comparison Block */}
                 <div className="bg-[#070814]/30 border border-brand-border/40 p-5 rounded-2xl space-y-3">
-                  <h5 className="text-[13px] font-bold text-brand-dim border-b border-brand-border/20 pb-2 select-none">
+                  <h5 className="text-[13px] font-bold text-brand-dim border-b border-brand-border/20 pb-2">
                     | تعديلات تحويلات العهدة للزملاء
                   </h5>
                   {changesList.length > 0 ? (
@@ -844,7 +844,7 @@ export default function EditRequestsClient({
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-4 text-xs text-brand-dim/50 select-none">
+                    <div className="text-center py-4 text-xs text-brand-dim/50">
                       لا توجد تعديلات في تحويلات العهدة الخاصة بهذا التقرير.
                     </div>
                   )}
@@ -882,7 +882,7 @@ export default function EditRequestsClient({
           })}
         </div>
       ) : (
-        <div className="border border-dashed border-brand-border/20 rounded-[24px] bg-[#070814]/10 py-20 text-center select-none">
+        <div className="border border-dashed border-brand-border/20 rounded-[24px] bg-[#070814]/10 py-20 text-center">
           <div className="flex flex-col items-center justify-center space-y-4 max-w-sm mx-auto">
             <div className="w-14 h-14 rounded-2xl bg-white/[0.01] border border-brand-border/30 text-brand-dim/40 flex items-center justify-center shadow-inner">
               <Clock size={28} />
@@ -901,7 +901,7 @@ export default function EditRequestsClient({
 
       {/* Confirmation rejection modal dialog */}
       {rejectTarget && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[#05060f]/80 backdrop-blur-sm p-4 select-none animate-fade-in text-right">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[#05060f]/80 backdrop-blur-sm p-4 animate-fade-in text-right">
           <div className="w-full max-w-md bg-brand-card border border-brand-border rounded-[24px] shadow-2xl p-6 md:p-8 space-y-6 relative animate-scale-in">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-brand-border/20 pb-4">

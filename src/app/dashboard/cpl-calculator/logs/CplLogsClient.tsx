@@ -340,7 +340,7 @@ export default function CplLogsClient({
   };
 
   return (
-    <div className="space-y-6 font-cairo select-none" dir="rtl">
+    <div className="space-y-6 font-cairo" dir="rtl">
       {/* Header Banner */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#0f172a] via-[#1e1b4b] to-[#0f172a] p-6 border border-brand-accent/30 shadow-2xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

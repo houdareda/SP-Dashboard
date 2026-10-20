@@ -107,14 +107,14 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen w-full flex items-center justify-center bg-brand-bg px-4 relative overflow-hidden select-none">
+    <main className="min-h-screen w-full flex items-center justify-center bg-brand-bg px-4 relative overflow-hidden">
       {/* Background glow effects */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-brand-accent/10 rounded-full blur-[120px] pointer-events-none" />
       
       {isRedirecting && (
         <div
           onClick={() => setIsRedirecting(false)}
-          className="fixed inset-0 bg-[#05060f]/95 backdrop-blur-md z-[100] flex flex-col items-center justify-center font-cairo cursor-pointer select-none"
+          className="fixed inset-0 bg-[#05060f]/95 backdrop-blur-md z-[100] flex flex-col items-center justify-center font-cairo cursor-pointer"
         >
           <div className="flex flex-col items-center gap-4 text-center px-4">
             <div className="w-16 h-16 rounded-2xl bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center shadow-[0_0_30px_rgba(139,92,246,0.15)] animate-pulse">
@@ -133,14 +133,14 @@ export default function LoginPage() {
         
         {/* Logo */}
         <div className="text-center mb-2">
-          <h1 className="text-3xl font-extrabold tracking-tight font-inter dir-ltr inline-flex items-center gap-1.5 select-none">
+          <h1 className="text-3xl font-extrabold tracking-tight font-inter dir-ltr inline-flex items-center gap-1.5">
             <span className="text-brand-accent font-bold">Point</span>
             <span className="text-white font-bold">Shift</span>
           </h1>
         </div>
 
         {/* Subtitle */}
-        <p className="text-center text-sm text-brand-dim mb-8 font-cairo select-none leading-relaxed">
+        <p className="text-center text-sm text-brand-dim mb-8 font-cairo leading-relaxed">
           أدخل بيانات الاعتماد الخاصة بك للوصول إلى لوحة التحكم
         </p>
 
@@ -149,7 +149,7 @@ export default function LoginPage() {
           
           {/* Email Field */}
           <div className="space-y-2">
-            <label htmlFor="email" className="block text-sm font-medium text-brand-dim text-right select-none">
+            <label htmlFor="email" className="block text-sm font-medium text-brand-dim text-right">
               البريد الإلكتروني
             </label>
             <div className="relative">
@@ -181,7 +181,7 @@ export default function LoginPage() {
 
           {/* Password Field */}
           <div className="space-y-2">
-            <label htmlFor="password" className="block text-sm font-medium text-brand-dim text-right select-none">
+            <label htmlFor="password" className="block text-sm font-medium text-brand-dim text-right">
               كلمة المرور
             </label>
             <div className="relative">

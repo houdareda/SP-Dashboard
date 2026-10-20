@@ -152,7 +152,27 @@ body {
   min-height: 100vh;
   margin: 0;
   overflow-x: hidden;
+  user-select: text;
+  -webkit-user-select: text;
 }
+
+/* Custom text selection highlight matching theme accent */
+::selection {
+  background-color: var(--accent-primary) !important;
+  color: #ffffff !important;
+}
+
+::-moz-selection {
+  background-color: var(--accent-primary) !important;
+  color: #ffffff !important;
+}
+
+/* Ensure inputs, textareas, and tables allow effortless selection and copying */
+input, textarea, select {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
 
 /* Custom autofill style overrides to prevent default browser white background in dark mode */
 input:-webkit-autofill,

@@ -302,7 +302,7 @@ export default function DashboardShell({
       <div className="absolute top-0 right-0 w-[450px] h-[450px] bg-brand-accent/8 rounded-full blur-[120px] pointer-events-none z-10" />
 
       {/* Mobile Top Header Bar */}
-      <header className="lg:hidden fixed top-0 right-0 left-0 h-16 bg-[#05060f]/90 backdrop-blur-md border-b border-brand-border/40 flex items-center justify-between px-6 z-40 select-none">
+      <header className="lg:hidden fixed top-0 right-0 left-0 h-16 bg-[#05060f]/90 backdrop-blur-md border-b border-brand-border/40 flex items-center justify-between px-6 z-40">
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           className="w-10 h-10 rounded-xl bg-brand-accent hover:bg-brand-accent/90 text-white flex items-center justify-center shadow-[0_0_15px_rgba(139,92,246,0.35)] transition-all duration-300 active:scale-[0.95] focus:outline-none cursor-pointer"
@@ -352,7 +352,7 @@ export default function DashboardShell({
 
       {/* Global Floating Toast Alert (bottom-left popup) */}
       {activeNotificationToast && (
-        <div className="fixed bottom-6 left-6 z-[9999] max-w-sm w-full bg-[#0a0d16]/95 backdrop-blur-2xl border border-brand-accent/30 rounded-2xl shadow-2xl p-4 flex items-start gap-3.5 select-none animate-slide-in-left text-right">
+        <div className="fixed bottom-6 left-6 z-[9999] max-w-sm w-full bg-[#0a0d16]/95 backdrop-blur-2xl border border-brand-accent/30 rounded-2xl shadow-2xl p-4 flex items-start gap-3.5 animate-slide-in-left text-right">
           <div className="w-10 h-10 rounded-xl bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center text-brand-accent shrink-0 mt-0.5 animate-pulse">
             <Bell size={18} />
           </div>

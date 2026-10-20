@@ -160,7 +160,7 @@ export default function DashboardClient({
   else if (role === "senioragent") roleText = "سينيور إيجنت";
 
   return (
-    <div className="space-y-6 text-right font-cairo select-none" dir="rtl">
+    <div className="space-y-6 text-right font-cairo" dir="rtl">
       
       {/* Top Header Card */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-brand-border/40 pb-5">
@@ -196,7 +196,7 @@ export default function DashboardClient({
                 dir="rtl"
                 onClick={() => setIsAgentDropdownOpen(!isAgentDropdownOpen)}
                 disabled={myOnly}
-                className={`w-full h-[46px] px-4 rounded-xl bg-[#070912] border transition-all cursor-pointer flex items-center justify-between select-none disabled:opacity-40 disabled:cursor-not-allowed ${
+                className={`w-full h-[46px] px-4 rounded-xl bg-[#070912] border transition-all cursor-pointer flex items-center justify-between disabled:opacity-40 disabled:cursor-not-allowed ${
                   isAgentDropdownOpen ? "border-brand-accent shadow-[0_0_10px_rgba(139,92,246,0.2)]" : "border-brand-border/80"
                 }`}
               >
@@ -271,7 +271,7 @@ export default function DashboardClient({
 
           {/* Senior Agent My Data Only Toggle */}
           {role === "senioragent" && (
-            <div className="flex items-center gap-2 bg-[#070912] border border-brand-border/80 rounded-xl px-3 py-1.5 select-none h-[46px]">
+            <div className="flex items-center gap-2 bg-[#070912] border border-brand-border/80 rounded-xl px-3 py-1.5 h-[46px]">
               <span className="text-xs font-bold text-brand-dim">عرض بياناتي فقط</span>
               <button
                 type="button"
@@ -491,7 +491,7 @@ export default function DashboardClient({
             </div>
 
             {/* List breakdown of categories */}
-            <div className="space-y-3.5 select-none">
+            <div className="space-y-3.5">
               {charts.distribution.map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-1 text-brand-dim/70 font-semibold">

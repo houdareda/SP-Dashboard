@@ -226,7 +226,7 @@ export default function Sidebar({
   };
 
   return (
-    <aside className={`w-72 bg-[#0c0e18]/95 border-l border-brand-border/40 backdrop-blur-xl min-h-screen flex flex-col fixed right-0 top-0 bottom-0 z-45 select-none font-cairo transition-transform duration-300 transform lg:translate-x-0 ${
+    <aside className={`w-72 bg-[#0c0e18]/95 border-l border-brand-border/40 backdrop-blur-xl min-h-screen flex flex-col fixed right-0 top-0 bottom-0 z-45 font-cairo transition-transform duration-300 transform lg:translate-x-0 ${
       isOpenMobile ? "translate-x-0" : "translate-x-full"
     }`}>
       {/* Sidebar Header (Logo & Notification Bell) */}
@@ -254,7 +254,7 @@ export default function Sidebar({
 
             {isThemeOpen && (
               <div className="absolute left-4 right-4 top-[74px] bg-[#0c0e1b]/98 backdrop-blur-2xl border border-brand-border/60 rounded-2xl shadow-[0_20px_45px_rgba(0,0,0,0.6)] p-5 z-50 text-right animate-scale-in">
-                <div className="flex items-center justify-between border-b border-brand-border/30 pb-3 mb-4 select-none">
+                <div className="flex items-center justify-between border-b border-brand-border/30 pb-3 mb-4">
                   <span className="text-xs font-extrabold text-white flex items-center gap-1.5">
                     <Palette size={14} className="text-brand-accent" />
                     <span>تخصيص مظهر الموقع</span>
@@ -404,7 +404,7 @@ export default function Sidebar({
             {isNotificationsOpen && (
               <div className="absolute left-4 right-4 top-[74px] bg-[#0c0e1b]/98 backdrop-blur-2xl border border-brand-border/60 rounded-2xl shadow-[0_20px_45px_rgba(0,0,0,0.6)] p-4 z-50 text-right animate-scale-in">
                 {/* Header */}
-                <div className="flex items-center justify-between border-b border-brand-border/30 pb-3 mb-3 select-none">
+                <div className="flex items-center justify-between border-b border-brand-border/30 pb-3 mb-3">
                   <span className="text-xs font-extrabold text-white flex items-center gap-1.5">
                     <span>التنبيهات</span>
                     {unreadCount > 0 && (
@@ -430,7 +430,7 @@ export default function Sidebar({
                 {/* Body */}
                 <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar font-cairo pr-0.5 animate-fade-in">
                   {notifications.length === 0 ? (
-                    <div className="text-center py-10 text-xs text-brand-dim/40 select-none flex flex-col items-center justify-center gap-2">
+                    <div className="text-center py-10 text-xs text-brand-dim/40 flex flex-col items-center justify-center gap-2">
                       <Bell size={24} className="text-brand-dim/20" />
                       <span>لا توجد تنبيهات جديدة حالياً.</span>
                     </div>
@@ -441,7 +441,7 @@ export default function Sidebar({
                         onClick={() => {
                           if (!notif.is_read) onMarkAsRead(notif.id);
                         }}
-                        className={`p-3 rounded-xl border text-right transition-all duration-200 cursor-pointer select-none group relative overflow-hidden ${
+                        className={`p-3 rounded-xl border text-right transition-all duration-200 cursor-pointer group relative overflow-hidden ${
                           notif.is_read
                             ? "bg-[#0b0d19]/40 border-brand-border/15 opacity-60 hover:opacity-100 hover:bg-[#0b0d19]/70"
                             : "bg-brand-accent/[0.06] border-brand-accent/20 hover:bg-brand-accent/[0.1] hover:border-brand-accent/30 shadow-[0_2px_10px_rgba(139,92,246,0.04)]"

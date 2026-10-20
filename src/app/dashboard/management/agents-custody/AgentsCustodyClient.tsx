@@ -141,7 +141,7 @@ export default function AgentsCustodyClient({
   };
 
   return (
-    <div className="space-y-8 font-cairo select-none relative text-right" dir="rtl">
+    <div className="space-y-8 font-cairo relative text-right" dir="rtl">
       {/* Header section */}
       <div className="flex items-start gap-4">
         <div className="w-12 h-12 rounded-xl bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center text-brand-accent shrink-0 mt-1">
@@ -156,7 +156,7 @@ export default function AgentsCustodyClient({
       </div>
 
       {/* Summary Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 select-none">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Card 1: Total Current Custody */}
         <div className="group relative rounded-[24px] bg-brand-card border border-brand-border backdrop-blur-xl p-6 hover:border-brand-accent/30 transition-all duration-300 shadow-[0_4px_24px_rgba(0,0,0,0.3)] hover:shadow-[0_8px_32px_rgba(139,92,246,0.06)] overflow-hidden">
           <div className="absolute -top-[100px] -left-[100px] w-[200px] h-[200px] bg-emerald-500/5 rounded-full blur-[50px] pointer-events-none" />
@@ -234,7 +234,7 @@ export default function AgentsCustodyClient({
                   setIsAgentDropdownOpen(!isAgentDropdownOpen);
                   setIsRoleDropdownOpen(false);
                 }}
-                className={`w-full h-[46px] px-4 rounded-xl bg-[#070912] border transition-all cursor-pointer flex items-center justify-between select-none ${
+                className={`w-full h-[46px] px-4 rounded-xl bg-[#070912] border transition-all cursor-pointer flex items-center justify-between ${
                   isAgentDropdownOpen ? "border-brand-accent shadow-[0_0_10px_rgba(139,92,246,0.2)]" : "border-brand-border/80"
                 }`}
               >
@@ -330,7 +330,7 @@ export default function AgentsCustodyClient({
                   <Calendar size={13} />
                 </span>
               </div>
-              <span className="text-brand-dim text-xs select-none">إلى</span>
+              <span className="text-brand-dim text-xs">إلى</span>
               <div className="relative flex-1">
                 <input
                   type="date"
@@ -358,7 +358,7 @@ export default function AgentsCustodyClient({
                   setIsRoleDropdownOpen(!isRoleDropdownOpen);
                   setIsAgentDropdownOpen(false);
                 }}
-                className={`w-full h-[46px] px-4 rounded-xl bg-[#070912] border transition-all cursor-pointer flex items-center justify-between select-none ${
+                className={`w-full h-[46px] px-4 rounded-xl bg-[#070912] border transition-all cursor-pointer flex items-center justify-between ${
                   isRoleDropdownOpen ? "border-brand-accent shadow-[0_0_10px_rgba(139,92,246,0.2)]" : "border-brand-border/80"
                 }`}
               >
@@ -450,7 +450,7 @@ export default function AgentsCustodyClient({
           {(selectedAgentIds.length > 0 || startDate || endDate || selectedRole !== "all" || walletSearch) && (
             <button
               onClick={clearFilters}
-              className="h-[46px] px-5 bg-white/5 hover:bg-white/10 border border-brand-border/50 text-white hover:text-brand-accent rounded-xl text-xs font-semibold cursor-pointer transition-all active:scale-[0.98] select-none shrink-0"
+              className="h-[46px] px-5 bg-white/5 hover:bg-white/10 border border-brand-border/50 text-white hover:text-brand-accent rounded-xl text-xs font-semibold cursor-pointer transition-all active:scale-[0.98] shrink-0"
             >
               إعادة تعيين
             </button>
@@ -464,7 +464,7 @@ export default function AgentsCustodyClient({
           {agents.length > 0 ? (
             <table className="w-full text-right border-collapse text-xs md:text-sm">
               <thead>
-                <tr className="border-b border-brand-border/40 text-brand-dim/80 bg-[#070814]/20 select-none">
+                <tr className="border-b border-brand-border/40 text-brand-dim/80 bg-[#070814]/20">
                   <th className="py-4 px-6 font-bold w-12" />
                   <th className="py-4 px-6 font-bold">الموظف</th>
                   <th className="py-4 px-6 font-bold">صلاحية الحساب</th>
@@ -486,7 +486,7 @@ export default function AgentsCustodyClient({
                         onClick={() => toggleExpandAgent(agent.id)}
                       >
                         {/* Accordion Expand indicator */}
-                        <td className="py-4.5 px-6 text-center select-none">
+                        <td className="py-4.5 px-6 text-center">
                           <ChevronDown
                             size={16}
                             className={`text-white/40 transition-transform duration-200 ${
@@ -498,7 +498,7 @@ export default function AgentsCustodyClient({
                         {/* Employee profile */}
                         <td className="py-4.5 px-6">
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center text-brand-accent shrink-0 select-none">
+                            <div className="w-8 h-8 rounded-full bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center text-brand-accent shrink-0">
                               <User size={14} />
                             </div>
                             <div className="space-y-0.5">
@@ -515,11 +515,11 @@ export default function AgentsCustodyClient({
                         {/* Account Role */}
                         <td className="py-4.5 px-6">
                           {agent.role === "senioragent" ? (
-                            <span className="inline-flex items-center px-2 py-0.5 text-[9px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full select-none">
+                            <span className="inline-flex items-center px-2 py-0.5 text-[9px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full">
                               Senior Agent
                             </span>
                           ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 text-[9px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-full select-none">
+                            <span className="inline-flex items-center px-2 py-0.5 text-[9px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-full">
                               موظف
                             </span>
                           )}
@@ -561,7 +561,7 @@ export default function AgentsCustodyClient({
                       {/* Accordion wallets list block */}
                       {isExpanded && (
                         <tr>
-                          <td colSpan={7} className="p-0 bg-[#070810]/40 border-t border-b border-brand-border/10 select-none animate-slide-in">
+                          <td colSpan={7} className="p-0 bg-[#070810]/40 border-t border-b border-brand-border/10 animate-slide-in">
                             <div className="px-12 py-5 space-y-4">
                               <div className="flex items-center gap-2 border-b border-brand-border/20 pb-2">
                                 <Wallet size={14} className="text-brand-accent" />
@@ -573,16 +573,16 @@ export default function AgentsCustodyClient({
                                   {agent.wallets.map((wallet) => (
                                     <div
                                       key={wallet.id}
-                                      className="flex items-center justify-between p-3.5 rounded-xl border bg-[#05060a]/80 border-brand-border/50 text-xs hover:border-brand-accent/25 transition-all select-none"
+                                      className="flex items-center justify-between p-3.5 rounded-xl border bg-[#05060a]/80 border-brand-border/50 text-xs hover:border-brand-accent/25 transition-all"
                                     >
                                       {/* Left: phone number & status */}
                                       <div className="space-y-1">
                                         <div className="flex items-center gap-2">
                                           <span className="font-bold text-white font-mono tracking-wider">{wallet.phone_number}</span>
                                           {wallet.is_active ? (
-                                            <span className="inline-flex items-center px-1.5 py-0.5 text-[8.5px] font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 rounded-md select-none">نشطة</span>
+                                            <span className="inline-flex items-center px-1.5 py-0.5 text-[8.5px] font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 rounded-md">نشطة</span>
                                           ) : (
-                                            <span className="inline-flex items-center px-1.5 py-0.5 text-[8.5px] font-bold text-white/30 bg-white/5 border border-white/10 rounded-md select-none">غير نشطة</span>
+                                            <span className="inline-flex items-center px-1.5 py-0.5 text-[8.5px] font-bold text-white/30 bg-white/5 border border-white/10 rounded-md">غير نشطة</span>
                                           )}
                                         </div>
                                         <p className="text-[9.5px] text-brand-dim/60 leading-none">شحن للفترة: <span className="font-bold font-mono text-white/80">{wallet.approvedFundsInPeriod.toLocaleString("en-US")}</span></p>
@@ -614,7 +614,7 @@ export default function AgentsCustodyClient({
               </tbody>
             </table>
           ) : (
-            <div className="border border-dashed border-brand-border/20 rounded-[24px] bg-[#070814]/10 py-20 text-center select-none">
+            <div className="border border-dashed border-brand-border/20 rounded-[24px] bg-[#070814]/10 py-20 text-center">
               <div className="flex flex-col items-center justify-center space-y-4 max-w-sm mx-auto">
                 <div className="w-14 h-14 rounded-2xl bg-white/[0.01] border border-brand-border/30 text-brand-dim/40 flex items-center justify-center shadow-inner">
                   <Users size={28} />

@@ -89,7 +89,7 @@ export default async function DashboardOverviewPage({
     <div className="space-y-6 font-cairo">
       {/* Alert Banner for Unauthorized Access */}
       {error === "unauthorized" && (
-        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4.5 rounded-2xl text-sm font-semibold flex items-center gap-3 animate-slide-in select-none" dir="rtl">
+        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4.5 rounded-2xl text-sm font-semibold flex items-center gap-3 animate-slide-in" dir="rtl">
           <AlertTriangle size={18} className="shrink-0" />
           <span>عذراً، لا تملك الصلاحية الكافية للوصول إلى تلك الصفحة (Unauthorized).</span>
         </div>

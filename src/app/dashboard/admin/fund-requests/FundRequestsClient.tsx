@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   Loader2,
   Wallet,
+  Copy,
 } from "lucide-react";
 import {
   AdminFundRequest,
@@ -73,6 +74,39 @@ export default function FundRequestsClient({
     setTimeout(() => {
       setToast(null);
     }, 4500);
+  };
+
+  // Copied Wallet Phone State
+  const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
+
+  const handleCopyWalletNumber = (e: React.MouseEvent, phoneNumber: string, agentName?: string) => {
+    e.stopPropagation();
+    if (!phoneNumber || phoneNumber === "محفظة غير معروفة") return;
+
+    if (typeof navigator !== "undefined" && navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(phoneNumber);
+    } else {
+      const textArea = document.createElement("textarea");
+      textArea.value = phoneNumber;
+      textArea.style.position = "fixed";
+      textArea.style.opacity = "0";
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand("copy");
+      } catch (err) {
+        console.error("Copy fallback failed:", err);
+      }
+      document.body.removeChild(textArea);
+    }
+
+    setCopiedPhone(phoneNumber);
+    setTimeout(() => {
+      setCopiedPhone((prev) => (prev === phoneNumber ? null : prev));
+    }, 2500);
+
+    const agentSuffix = agentName ? ` الخاص بالموظف (${agentName})` : "";
+    showToast(`تم نسخ رقم المحفظة ${phoneNumber}${agentSuffix} بنجاح 📋`, "success");
   };
 
   // Sync server-side props with local state
@@ -292,17 +326,22 @@ export default function FundRequestsClient({
   }, [requests, selectedAgentIds, startDate, endDate, sortOrder]);
 
   return (
-    <div className="space-y-8 font-cairo select-none relative text-right" dir="rtl">
+    <div className="space-y-8 font-cairo relative text-right" dir="rtl">
       {/* Toast Notification */}
       {toast && (
         <div
           className={`fixed top-6 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl backdrop-blur-xl border ${
             toast.type === "success"
-              ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
-              : "bg-red-500/15 border-red-500/30 text-red-400"
+              ? "bg-[#0b1716]/95 border-emerald-500/40 text-emerald-300 shadow-[0_10px_30px_rgba(16,185,129,0.2)]"
+              : "bg-[#1c0e12]/95 border-red-500/40 text-red-300 shadow-[0_10px_30px_rgba(239,68,68,0.2)]"
           } transition-all duration-300 animate-slide-in font-semibold`}
         >
-          <span>{toast.message}</span>
+          {toast.type === "success" ? (
+            <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
+          ) : (
+            <AlertTriangle size={18} className="text-red-400 shrink-0" />
+          )}
+          <span className="text-sm font-cairo">{toast.message}</span>
         </div>
       )}
 
@@ -333,7 +372,7 @@ export default function FundRequestsClient({
                   setIsAgentDropdownOpen(!isAgentDropdownOpen);
                   setIsSortDropdownOpen(false);
                 }}
-                className={`w-full h-[46px] px-4 rounded-xl bg-[#070912] border transition-all cursor-pointer flex items-center justify-between select-none ${
+                className={`w-full h-[46px] px-4 rounded-xl bg-[#070912] border transition-all cursor-pointer flex items-center justify-between ${
                   isAgentDropdownOpen ? "border-brand-accent shadow-[0_0_10px_rgba(139,92,246,0.2)]" : "border-brand-border/80"
                 }`}
               >
@@ -429,7 +468,7 @@ export default function FundRequestsClient({
                   <Calendar size={13} />
                 </span>
               </div>
-              <span className="text-brand-dim text-xs select-none">إلى</span>
+              <span className="text-brand-dim text-xs">إلى</span>
               <div className="relative flex-1">
                 <input
                   type="date"
@@ -457,7 +496,7 @@ export default function FundRequestsClient({
                   setIsSortDropdownOpen(!isSortDropdownOpen);
                   setIsAgentDropdownOpen(false);
                 }}
-                className={`w-full h-[46px] px-4 rounded-xl bg-[#070912] border transition-all cursor-pointer flex items-center justify-between select-none ${
+                className={`w-full h-[46px] px-4 rounded-xl bg-[#070912] border transition-all cursor-pointer flex items-center justify-between ${
                   isSortDropdownOpen ? "border-brand-accent shadow-[0_0_10px_rgba(139,92,246,0.2)]" : "border-brand-border/80"
                 }`}
               >
@@ -505,7 +544,7 @@ export default function FundRequestsClient({
       </div>
 
       {/* Statistics Counter */}
-      <div className="flex items-center justify-between select-none">
+      <div className="flex items-center justify-between">
         <span className="text-xs text-brand-dim font-semibold">
           عدد الطلبات المعروضة: <span className="text-brand-accent font-bold text-sm font-inter">{filteredRequests.length}</span>
         </span>
@@ -517,7 +556,7 @@ export default function FundRequestsClient({
           {filteredRequests.length > 0 ? (
             <table className="w-full text-right border-collapse text-xs md:text-sm">
               <thead>
-                <tr className="border-b border-brand-border/40 text-brand-dim/80 bg-[#070814]/20 select-none">
+                <tr className="border-b border-brand-border/40 text-brand-dim/80 bg-[#070814]/20">
                   <th className="py-4 px-6 font-bold">اسم الموظف</th>
                   <th className="py-4 px-6 font-bold">التاريخ</th>
                   <th className="py-4 px-6 font-bold">محفظة الاستلام</th>
@@ -535,7 +574,7 @@ export default function FundRequestsClient({
                     {/* Employee profile */}
                     <td className="py-4.5 px-6">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center text-brand-accent shrink-0 select-none">
+                        <div className="w-8 h-8 rounded-full bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center text-brand-accent shrink-0">
                           <User size={14} />
                         </div>
                         <span className="font-semibold text-white capitalize">
@@ -552,26 +591,78 @@ export default function FundRequestsClient({
                     {/* Target Wallet and Smart Balance */}
                     <td className="py-4.5 px-6 space-y-1 text-right">
                       {req.is_multi_wallet ? (
-                        <div className="space-y-1">
-                          <span className="inline-block px-1.5 py-0.5 text-[9.5px] font-extrabold bg-brand-accent/20 text-brand-accent border border-brand-accent/30 rounded-md mb-0.5 select-none animate-pulse font-cairo">
+                        <div className="space-y-1.5">
+                          <span className="inline-block px-1.5 py-0.5 text-[9.5px] font-extrabold bg-brand-accent/20 text-brand-accent border border-brand-accent/30 rounded-md mb-0.5 animate-pulse font-cairo">
                             طلب متعدد المحافظ
                           </span>
-                          <div className="text-xs text-white/95 space-y-0.5 font-inter font-semibold select-all">
+                          <div className="text-xs text-white/95 space-y-1 font-inter font-semibold">
                             {Array.isArray(req.multi_wallet_data) ? (
-                              req.multi_wallet_data.map((item: any, idx: number) => (
-                                <div key={idx}>
-                                  {item.phone_number} {item.esim_number ? `(${item.esim_number})` : ""}
-                                </div>
-                              ))
+                              req.multi_wallet_data.map((item: any, idx: number) => {
+                                const isCopied = copiedPhone === item.phone_number;
+                                return (
+                                  <div key={idx} className="flex items-center gap-2 group/copy">
+                                    <span
+                                      onClick={(e) => handleCopyWalletNumber(e, item.phone_number, req.agent?.full_name)}
+                                      className="font-mono cursor-pointer hover:text-brand-accent transition-colors hover:underline underline-offset-4"
+                                      title="اضغط لنسخ الرقم"
+                                    >
+                                      {item.phone_number} {item.esim_number ? `(${item.esim_number})` : ""}
+                                    </span>
+                                    {item.phone_number && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => handleCopyWalletNumber(e, item.phone_number, req.agent?.full_name)}
+                                        className={`p-1 rounded-md border transition-all cursor-pointer ${
+                                          isCopied
+                                            ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                                            : "bg-white/5 hover:bg-white/10 border-white/10 text-white/40 hover:text-white group-hover/copy:border-brand-accent/40 group-hover/copy:text-brand-accent"
+                                        }`}
+                                        title="نسخ الرقم"
+                                      >
+                                        {isCopied ? <Check size={11} className="stroke-[2.5]" /> : <Copy size={11} />}
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })
                             ) : (
-                              <div>{req.wallet?.phone_number || "محفظة غير معروفة"}</div>
+                              <div
+                                onClick={(e) => handleCopyWalletNumber(e, req.wallet?.phone_number || "", req.agent?.full_name)}
+                                className="cursor-pointer hover:text-brand-accent transition-colors"
+                              >
+                                {req.wallet?.phone_number || "محفظة غير معروفة"}
+                              </div>
                             )}
                           </div>
                         </div>
                       ) : (
                         <>
-                          <div className="font-bold text-white font-inter tracking-wide">
-                            {req.wallet?.phone_number || "محفظة غير معروفة"}
+                          <div className="flex items-center gap-2 group/copy">
+                            <span
+                              onClick={(e) => handleCopyWalletNumber(e, req.wallet?.phone_number || "", req.agent?.full_name)}
+                              className="font-bold text-white font-inter tracking-wide cursor-pointer hover:text-brand-accent transition-colors hover:underline underline-offset-4"
+                              title="اضغط لنسخ الرقم"
+                            >
+                              {req.wallet?.phone_number || "محفظة غير معروفة"}
+                            </span>
+                            {req.wallet?.phone_number && (
+                              <button
+                                type="button"
+                                onClick={(e) => handleCopyWalletNumber(e, req.wallet?.phone_number || "", req.agent?.full_name)}
+                                className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                                  copiedPhone === req.wallet.phone_number
+                                    ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                                    : "bg-white/5 hover:bg-white/10 border-white/10 text-white/40 hover:text-white group-hover/copy:border-brand-accent/40 group-hover/copy:text-brand-accent"
+                                }`}
+                                title="نسخ الرقم"
+                              >
+                                {copiedPhone === req.wallet.phone_number ? (
+                                  <Check size={12} className="stroke-[2.5]" />
+                                ) : (
+                                  <Copy size={12} />
+                                )}
+                              </button>
+                            )}
                           </div>
                           <div className="text-[10.5px] text-brand-dim font-cairo">
                             الرصيد: {req.wallet_balance.toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م
@@ -599,19 +690,19 @@ export default function FundRequestsClient({
                     {/* Status Badge */}
                     <td className="py-4.5 px-6">
                       {req.status === "pending" && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-amber-400 bg-amber-400/10 border border-amber-400/25 rounded-full select-none">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-amber-400 bg-amber-400/10 border border-amber-400/25 rounded-full">
                           <Clock size={12} />
                           <span>قيد الانتظار</span>
                         </span>
                       )}
                       {req.status === "approved" && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/25 rounded-full select-none">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/25 rounded-full">
                           <CheckCircle2 size={12} />
                           <span>مقبول</span>
                         </span>
                       )}
                       {req.status === "rejected" && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-red-400 bg-red-400/10 border border-red-400/25 rounded-full select-none">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-red-400 bg-red-400/10 border border-red-400/25 rounded-full">
                           <AlertTriangle size={12} />
                           <span>مرفوض</span>
                         </span>
@@ -626,7 +717,7 @@ export default function FundRequestsClient({
                             type="button"
                             onClick={() => handleOpenApproveModal(req)}
                             disabled={isPending}
-                            className="flex items-center gap-1 px-4.5 py-2 bg-brand-accent hover:bg-brand-accent/90 text-white font-bold rounded-xl transition-all cursor-pointer select-none text-xs hover:shadow-[0_0_15px_rgba(139,92,246,0.25)] active:scale-95 disabled:opacity-50"
+                            className="flex items-center gap-1 px-4.5 py-2 bg-brand-accent hover:bg-brand-accent/90 text-white font-bold rounded-xl transition-all cursor-pointer text-xs hover:shadow-[0_0_15px_rgba(139,92,246,0.25)] active:scale-95 disabled:opacity-50"
                           >
                             <Check size={13} />
                             <span>موافقة</span>
@@ -635,7 +726,7 @@ export default function FundRequestsClient({
                             type="button"
                             onClick={() => handleReject(req)}
                             disabled={isPending}
-                            className="w-8.5 h-8.5 flex items-center justify-center bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/25 hover:text-white rounded-xl transition-all cursor-pointer select-none active:scale-95 disabled:opacity-50"
+                            className="w-8.5 h-8.5 flex items-center justify-center bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/25 hover:text-white rounded-xl transition-all cursor-pointer active:scale-95 disabled:opacity-50"
                             title="رفض الطلب"
                           >
                             <X size={14} />
@@ -666,7 +757,7 @@ export default function FundRequestsClient({
               </tbody>
             </table>
           ) : (
-            <div className="border border-dashed border-brand-border/20 rounded-[24px] bg-[#070814]/10 py-20 text-center select-none">
+            <div className="border border-dashed border-brand-border/20 rounded-[24px] bg-[#070814]/10 py-20 text-center">
               <div className="flex flex-col items-center justify-center space-y-4 max-w-sm mx-auto">
                 <div className="w-14 h-14 rounded-2xl bg-white/[0.01] border border-brand-border/30 text-brand-dim/40 flex items-center justify-center shadow-inner">
                   <Clock size={28} />
@@ -685,7 +776,7 @@ export default function FundRequestsClient({
 
       {/* Confirmation approval modal dialog */}
       {activeModalRequest && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[#05060f]/80 backdrop-blur-sm p-4 select-none animate-fade-in text-right">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[#05060f]/80 backdrop-blur-sm p-4 animate-fade-in text-right">
           <div className="w-full max-w-md bg-brand-card border border-brand-border rounded-[24px] shadow-2xl p-6 md:p-8 space-y-6 relative animate-scale-in">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-brand-border/20 pb-4">
@@ -723,8 +814,38 @@ export default function FundRequestsClient({
                       ? "bg-red-500/10 border-red-500/25 text-red-400"
                       : "bg-emerald-500/10 border-emerald-500/25 text-emerald-400"
                   }`}>
-                    <Wallet size={14} className="mt-0.5 shrink-0" />
-                    <div className="space-y-0.5">
+                    <Wallet size={14} className="mt-0.5 shrink-0 text-brand-accent" />
+                    <div className="space-y-1 w-full text-right font-cairo">
+                      <div className="flex items-center justify-between pb-1 mb-1 border-b border-white/5">
+                        <span className="text-brand-dim text-xs font-semibold">محفظة الاستلام:</span>
+                        <div className="flex items-center gap-2 group/modalwallet">
+                          <span
+                            onClick={(e) => handleCopyWalletNumber(e, activeModalRequest.wallet?.phone_number || "", activeModalRequest.agent?.full_name)}
+                            className="font-mono font-bold text-white text-xs cursor-pointer hover:text-brand-accent transition-colors hover:underline"
+                            title="اضغط لنسخ الرقم"
+                          >
+                            {activeModalRequest.wallet?.phone_number || "محفظة غير معروفة"}
+                          </span>
+                          {activeModalRequest.wallet?.phone_number && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleCopyWalletNumber(e, activeModalRequest.wallet?.phone_number || "", activeModalRequest.agent?.full_name)}
+                              className={`p-1 rounded-md border transition-all cursor-pointer ${
+                                copiedPhone === activeModalRequest.wallet.phone_number
+                                  ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                                  : "bg-white/5 hover:bg-white/10 border-white/10 text-white/40 hover:text-white"
+                              }`}
+                              title="نسخ الرقم"
+                            >
+                              {copiedPhone === activeModalRequest.wallet.phone_number ? (
+                                <Check size={11} className="stroke-[2.5]" />
+                              ) : (
+                                <Copy size={11} />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </div>
                       <p className="font-bold font-cairo">
                         الحد المتبقي للمحفظة هذا الشهر:
                         <span className="font-inter mr-1.5">{remainingLimit.toLocaleString("en-US")} ج.م</span>
@@ -745,7 +866,33 @@ export default function FundRequestsClient({
                     {activeModalRequest.multi_wallet_data.map((item: any, idx: number) => (
                       <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs bg-[#070814]/60 p-3 rounded-lg border border-brand-border/20">
                         <div className="text-right space-y-0.5 font-cairo">
-                          <div className="font-mono text-white font-bold text-xs">{item.phone_number}</div>
+                          <div className="flex items-center gap-2 group/modalcopy">
+                            <span
+                              onClick={(e) => handleCopyWalletNumber(e, item.phone_number, activeModalRequest.agent?.full_name)}
+                              className="font-mono text-white font-bold text-xs cursor-pointer hover:text-brand-accent transition-colors hover:underline"
+                              title="اضغط لنسخ الرقم"
+                            >
+                              {item.phone_number}
+                            </span>
+                            {item.phone_number && (
+                              <button
+                                type="button"
+                                onClick={(e) => handleCopyWalletNumber(e, item.phone_number, activeModalRequest.agent?.full_name)}
+                                className={`p-1 rounded-md border transition-all cursor-pointer ${
+                                  copiedPhone === item.phone_number
+                                    ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                                    : "bg-white/5 hover:bg-white/10 border-white/10 text-white/40 hover:text-white group-hover/modalcopy:border-brand-accent/40 group-hover/modalcopy:text-brand-accent"
+                                }`}
+                                title="نسخ الرقم"
+                              >
+                                {copiedPhone === item.phone_number ? (
+                                  <Check size={10} className="stroke-[2.5]" />
+                                ) : (
+                                  <Copy size={10} />
+                                )}
+                              </button>
+                            )}
+                          </div>
                           {item.esim_number && (
                             <div className="text-[10px] text-brand-dim">الشريحة: {item.esim_number}</div>
                           )}
@@ -773,7 +920,7 @@ export default function FundRequestsClient({
                             }}
                             className="w-full bg-[#05060f] border border-brand-border/80 rounded-lg pl-3 pr-8 py-2 text-xs text-white focus:outline-none focus:border-brand-accent text-left dir-ltr font-inter"
                           />
-                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 font-bold select-none text-[10px] font-inter">
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 font-bold text-[10px] font-inter">
                             $
                           </span>
                         </div>
@@ -792,7 +939,7 @@ export default function FundRequestsClient({
                   <div className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl px-4 py-3.5 text-sm text-brand-accent font-bold font-inter text-left dir-ltr">
                     {parseFloat(approvedAmount || "0").toLocaleString("en-US")} ج.م
                   </div>
-                  <p className="text-[10px] text-amber-400 select-none font-semibold font-cairo">
+                  <p className="text-[10px] text-amber-400 font-semibold font-cairo">
                     * يرجى إدخال المبلغ المعتمد لكل محفظة بشكل منفصل. القيمة غير المدخلة سيتم اعتبارها صفر.
                   </p>
                 </div>
@@ -812,11 +959,11 @@ export default function FundRequestsClient({
                       onChange={(e) => setApprovedAmount(e.target.value)}
                       className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3 text-sm text-white focus:outline-none focus:border-brand-accent transition-all text-left dir-ltr font-inter"
                     />
-                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 font-bold select-none text-xs">
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 font-bold text-xs">
                       $
                     </span>
                   </div>
-                  <p className="text-[10px] text-brand-dim/60 select-none font-cairo">
+                  <p className="text-[10px] text-brand-dim/60 font-cairo">
                     * الحد الأقصى المسموح به: <span className="font-inter font-bold">{(activeModalRequest.wallet_remaining_limit ?? 200000).toLocaleString("en-US")} ج.م</span>
                   </p>
                 </div>
@@ -858,7 +1005,7 @@ export default function FundRequestsClient({
 
       {/* Confirmation rejection modal dialog */}
       {activeRejectRequest && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[#05060f]/80 backdrop-blur-sm p-4 select-none animate-fade-in text-right">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[#05060f]/80 backdrop-blur-sm p-4 animate-fade-in text-right">
           <div className="w-full max-w-md bg-brand-card border border-brand-border rounded-[24px] shadow-2xl p-6 md:p-8 space-y-6 relative animate-scale-in">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-brand-border/20 pb-4">

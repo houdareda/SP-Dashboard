@@ -2,7 +2,7 @@ import React from "react";
 
 export default function DashboardLoading() {
   return (
-    <div className="fixed inset-0 bg-[#05060f]/90 backdrop-blur-md z-[9999] flex flex-col items-center justify-center font-cairo select-none transition-all duration-300">
+    <div className="fixed inset-0 bg-[#05060f]/90 backdrop-blur-md z-[9999] flex flex-col items-center justify-center font-cairo transition-all duration-300">
       <div className="flex flex-col items-center gap-6 text-center">
         {/* Futuristic Premium Glowing Loader */}
         <div className="relative w-24 h-24 flex items-center justify-center">
@@ -14,7 +14,7 @@ export default function DashboardLoading() {
           
           {/* Logo center mark */}
           <div className="w-12 h-12 rounded-xl bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center shadow-[0_0_30px_rgba(139,92,246,0.25)] animate-pulse">
-            <span className="text-white text-xs font-bold font-inter select-none">SP</span>
+            <span className="text-white text-xs font-bold font-inter">SP</span>
           </div>
         </div>
 
@@ -27,7 +27,7 @@ export default function DashboardLoading() {
               <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-accent"></span>
             </span>
           </h2>
-          <p className="text-xs text-brand-dim animate-pulse select-none">
+          <p className="text-xs text-brand-dim animate-pulse">
             يتم الآن استرجاع ومزامنة أحدث البيانات من قاعدة البيانات...
           </p>
         </div>

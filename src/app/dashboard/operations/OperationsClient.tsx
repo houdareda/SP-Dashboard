@@ -496,7 +496,7 @@ export default function OperationsClient({
   };
 
   return (
-    <div className="space-y-8 font-cairo select-none relative text-right operations-container" dir="rtl">
+    <div className="space-y-8 font-cairo relative text-right operations-container" dir="rtl">
       <style dangerouslySetInnerHTML={{__html: `
         /* Enlarge input and select text for higher visibility and clarity */
         .operations-container input, 
@@ -629,7 +629,7 @@ export default function OperationsClient({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
                 
                 {/* 0. Toggle Multi-Wallet Mode Option */}
-                <div className="md:col-span-2 flex items-center justify-between p-4.5 bg-[#090b16]/60 border border-brand-border/30 rounded-2xl select-none">
+                <div className="md:col-span-2 flex items-center justify-between p-4.5 bg-[#090b16]/60 border border-brand-border/30 rounded-2xl">
                   <div className="space-y-0.5 text-right font-cairo">
                     <span className="text-sm font-bold text-white block">طلب شحن رصيد لعدة محافظ معاً</span>
                     <span className="text-xs text-brand-dim/80 block">تفعيل هذا الخيار للطلب على أكثر من رقم في نفس الوقت (للضرورة القصوى)</span>
@@ -732,7 +732,7 @@ export default function OperationsClient({
                                     placeholder="0.00"
                                     className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent transition-all text-left dir-ltr font-inter"
                                   />
-                                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 font-bold text-sm pointer-events-none select-none">
+                                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 font-bold text-sm pointer-events-none">
                                     $
                                   </span>
                                 </div>
@@ -850,7 +850,7 @@ export default function OperationsClient({
                           type="button"
                           onClick={() => !isPending && setIsDropdownOpen(!isDropdownOpen)}
                           disabled={isPending}
-                          className={`w-full flex items-center justify-between px-4 py-3.5 bg-[#070814]/80 border rounded-xl text-sm text-right transition-all cursor-pointer select-none relative focus:outline-none focus:ring-1 focus:ring-brand-glow ${
+                          className={`w-full flex items-center justify-between px-4 py-3.5 bg-[#070814]/80 border rounded-xl text-sm text-right transition-all cursor-pointer relative focus:outline-none focus:ring-1 focus:ring-brand-glow ${
                             isDropdownOpen ? "border-brand-accent text-white" : "border-brand-border/80 text-brand-dim"
                           } disabled:opacity-50`}
                         >
@@ -958,12 +958,12 @@ export default function OperationsClient({
                           placeholder="0.00"
                           className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter"
                         />
-                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 font-bold text-sm font-inter pointer-events-none select-none font-semibold">
+                        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 font-bold text-sm font-inter pointer-events-none font-semibold">
                           $
                         </span>
                       </div>
                       {selectedWallet && (
-                        <p className="text-[10px] text-brand-dim/60 select-none">
+                        <p className="text-[10px] text-brand-dim/60">
                           * الحد الأقصى المتبقي: <span className="font-inter font-bold text-emerald-400">{selectedWallet.remainingLimit.toLocaleString("en-US")}</span>
                         </p>
                       )}
@@ -1070,7 +1070,7 @@ export default function OperationsClient({
                       <Calendar size={16} />
                     </span>
                   </div>
-                  <span className="text-[10px] text-brand-dim/60 block mt-1 select-none">
+                  <span className="text-[10px] text-brand-dim/60 block mt-1">
                     * يمكنك إغلاق اليوم بحد أقصى مرتين فقط
                   </span>
                 </div>
@@ -1089,13 +1089,13 @@ export default function OperationsClient({
                       disabled={isPending}
                       value={totalCash}
                       placeholder="0.00"
-                      className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
+                      className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter cursor-not-allowed"
                     />
                     <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
                       <Wallet size={16} />
                     </span>
                   </div>
-                  <div className="flex items-center justify-between mt-1 text-[10px] text-brand-dim/50 select-none flex-wrap gap-2">
+                  <div className="flex items-center justify-between mt-1 text-[10px] text-brand-dim/50 flex-wrap gap-2">
                     <span>
                       * إجمالي العهدة الحالية: <span className="font-inter font-bold text-brand-accent">{currentCustody.toLocaleString("en-US")}</span>
                     </span>
@@ -1214,7 +1214,7 @@ export default function OperationsClient({
                                 onChange={(e) => updateTransferRow(idx, "amount", e.target.value)}
                                 className="w-full bg-[#070814] border border-brand-border rounded-xl pl-4 pr-9 py-3.5 text-xs text-white focus:outline-none focus:border-brand-accent transition-all text-left dir-ltr font-inter"
                               />
-                              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none font-bold text-xs select-none">
+                              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none font-bold text-xs">
                                 $
                               </span>
                             </div>
@@ -1424,7 +1424,7 @@ export default function OperationsClient({
                         disabled={isPending}
                         value={editTotalCash}
                         placeholder="0.00"
-                        className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
+                        className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter cursor-not-allowed"
                       />
                       <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
                         <Wallet size={16} />
@@ -1575,7 +1575,7 @@ export default function OperationsClient({
                                 onChange={(e) => updateEditTransferRow(idx, "amount", e.target.value)}
                                 className="w-full bg-[#070814] border border-brand-border rounded-xl pl-4 pr-9 py-3.5 text-xs text-white focus:outline-none focus:border-brand-accent transition-all text-left dir-ltr font-inter"
                               />
-                              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none font-bold text-xs select-none">
+                              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none font-bold text-xs">
                                 $
                               </span>
                             </div>
@@ -1621,7 +1621,7 @@ export default function OperationsClient({
             ) : (
               /* Empty state placeholder when no date is selected or fetching failed */
               !isFetchingReport && (
-                <div className="border border-dashed border-brand-border/40 rounded-[24px] bg-brand-card/20 py-20 text-center select-none animate-fade-in mt-6">
+                <div className="border border-dashed border-brand-border/40 rounded-[24px] bg-brand-card/20 py-20 text-center animate-fade-in mt-6">
                   <div className="flex flex-col items-center justify-center space-y-5 max-w-sm mx-auto">
                     <div className="w-14 h-14 rounded-2xl bg-white/[0.01] border border-brand-border/30 text-brand-dim/40 flex items-center justify-center shadow-inner">
                       <Calendar size={28} />

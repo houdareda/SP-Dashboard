@@ -456,7 +456,7 @@ export default function AgentsClient({
   }, [profiles, searchQuery, selectedRoles, selectedCreator, sortOrder]);
 
   return (
-    <div className="space-y-8 font-cairo select-none relative">
+    <div className="space-y-8 font-cairo relative">
       {/* Toast Notification */}
       {toast && (
         <div
@@ -581,7 +581,7 @@ export default function AgentsClient({
                   setIsRoleDropdownOpen(!isRoleDropdownOpen);
                   setIsCreatorDropdownOpen(false);
                 }}
-                className="flex items-center justify-between gap-2 w-full sm:w-auto px-4 py-2.5 bg-[#070814]/80 border border-brand-border/80 rounded-xl text-sm text-brand-dim hover:text-white transition-all cursor-pointer relative z-20 select-none"
+                className="flex items-center justify-between gap-2 w-full sm:w-auto px-4 py-2.5 bg-[#070814]/80 border border-brand-border/80 rounded-xl text-sm text-brand-dim hover:text-white transition-all cursor-pointer relative z-20"
               >
                 <div className="flex items-center gap-2">
                   <span>
@@ -671,7 +671,7 @@ export default function AgentsClient({
                   setIsCreatorDropdownOpen(!isCreatorDropdownOpen);
                   setIsRoleDropdownOpen(false);
                 }}
-                className="flex items-center justify-between gap-2 w-full sm:w-auto px-4 py-2.5 bg-[#070814]/80 border border-brand-border/80 rounded-xl text-sm text-brand-dim hover:text-white transition-all cursor-pointer relative z-20 select-none"
+                className="flex items-center justify-between gap-2 w-full sm:w-auto px-4 py-2.5 bg-[#070814]/80 border border-brand-border/80 rounded-xl text-sm text-brand-dim hover:text-white transition-all cursor-pointer relative z-20"
               >
                 <span>
                   {selectedCreator === ""
@@ -726,7 +726,7 @@ export default function AgentsClient({
             <button
               type="button"
               onClick={() => setSortOrder(sortOrder === "desc" ? "asc" : "desc")}
-              className="flex items-center justify-between gap-2 w-full sm:w-auto px-4 py-2.5 bg-[#070814]/80 border border-brand-border/80 rounded-xl text-sm text-brand-dim hover:text-white transition-all cursor-pointer select-none"
+              className="flex items-center justify-between gap-2 w-full sm:w-auto px-4 py-2.5 bg-[#070814]/80 border border-brand-border/80 rounded-xl text-sm text-brand-dim hover:text-white transition-all cursor-pointer"
               title={sortOrder === "desc" ? "الترتيب حسب الأقدم" : "الترتيب حسب الأحدث"}
             >
               <div className="flex items-center gap-2">
@@ -938,7 +938,7 @@ export default function AgentsClient({
                 })
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-6 py-16 text-center select-none">
+                  <td colSpan={6} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center justify-center space-y-4 max-w-sm mx-auto">
                       <div className="w-16 h-16 rounded-2xl bg-white/[0.02] border border-brand-border/40 text-brand-dim/50 flex items-center justify-center shadow-inner">
                         <Users size={32} />
@@ -992,7 +992,7 @@ export default function AgentsClient({
             </button>
 
             {/* Modal Header */}
-            <div className="space-y-1 text-right mb-6 select-none">
+            <div className="space-y-1 text-right mb-6">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
                 <UserPlus className="text-brand-accent" size={20} />
                 <span>{formMode === "add" ? "إضافة موظف جديد" : "تعديل بيانات الموظف"}</span>
@@ -1109,7 +1109,7 @@ export default function AgentsClient({
                       type="button"
                       disabled={isRoleInputDisabled || isPending}
                       onClick={() => setIsFormRoleDropdownOpen(!isFormRoleDropdownOpen)}
-                      className="w-full flex items-center justify-between bg-[#070814] border border-brand-border rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-right cursor-pointer select-none"
+                      className="w-full flex items-center justify-between bg-[#070814] border border-brand-border rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed text-right cursor-pointer"
                     >
                       <span>{getRoleLabel(role)}</span>
                       <ChevronDown size={16} className={`text-white/40 transition-transform duration-200 ${isFormRoleDropdownOpen ? "rotate-180" : ""}`} />

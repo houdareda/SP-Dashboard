@@ -659,7 +659,7 @@ export default function CplOperationsClient({
   };
 
   return (
-    <div className="space-y-8 font-cairo select-none relative text-right operations-container" dir="rtl">
+    <div className="space-y-8 font-cairo relative text-right operations-container" dir="rtl">
       <style dangerouslySetInnerHTML={{__html: `
         /* Enlarge input and select text for higher visibility and clarity */
         .operations-container input, 
@@ -804,7 +804,7 @@ export default function CplOperationsClient({
                           <Calendar size={16} />
                         </span>
                       </div>
-                      <span className="text-[10px] text-brand-dim/60 block mt-1 select-none">
+                      <span className="text-[10px] text-brand-dim/60 block mt-1">
                         * يمكنك إغلاق اليوم (النهاردة أو إمبارح) بحد أقصى مرتين فقط
                       </span>
                     </div>
@@ -830,7 +830,7 @@ export default function CplOperationsClient({
                           <Wallet size={16} />
                         </span>
                       </div>
-                      <div className="flex items-center justify-between mt-1 text-[10px] text-brand-dim/50 select-none flex-wrap gap-2">
+                      <div className="flex items-center justify-between mt-1 text-[10px] text-brand-dim/50 flex-wrap gap-2">
                         <span>
                           * إجمالي العهدة الحالية: <span className="font-inter font-bold text-brand-accent">{currentCustody.toLocaleString("en-US")} ج.م</span>
                         </span>
@@ -934,7 +934,7 @@ export default function CplOperationsClient({
                                     onChange={(e) => updateTransferRow(idx, "amount", e.target.value)}
                                     className="w-full bg-[#070814] border border-brand-border rounded-xl pl-4 pr-9 py-3.5 text-xs text-white focus:outline-none focus:border-brand-accent transition-all text-left dir-ltr font-inter"
                                   />
-                                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none font-bold text-xs select-none">
+                                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none font-bold text-xs">
                                     $
                                   </span>
                                 </div>
@@ -969,7 +969,7 @@ export default function CplOperationsClient({
                           disabled={isPending}
                           value={totalCash !== "" ? cashAfterExpenses.toFixed(2) : "0.00"}
                           placeholder="0.00"
-                          className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
+                          className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter cursor-not-allowed"
                         />
                         <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
                           <Coins size={16} />
@@ -1013,13 +1013,13 @@ export default function CplOperationsClient({
                           disabled={isPending}
                           value={totalCash !== "" ? calculatedMarketing2.toFixed(2) : "0.00"}
                           placeholder="0.00"
-                          className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
+                          className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter cursor-not-allowed"
                         />
                         <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
                           <Coins size={16} />
                         </span>
                       </div>
-                      <span className="text-[10px] text-brand-dim/50 block mt-1 select-none">
+                      <span className="text-[10px] text-brand-dim/50 block mt-1">
                         * يتم احتسابه تلقائياً: (توتال الكاش) - (إجمالي المحافظ والكامبين) - (باقي المصاريف والتحويلات).
                       </span>
                     </div>
@@ -1060,13 +1060,13 @@ export default function CplOperationsClient({
                           disabled={isPending}
                           value={totalCash !== "" ? totalAmount.toFixed(2) : "0.00"}
                           placeholder="0.00"
-                          className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
+                          className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter cursor-not-allowed"
                         />
                         <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-brand-accent pointer-events-none">
                           <ClipboardList size={16} />
                         </span>
                       </div>
-                      <span className="text-[10px] text-brand-dim/60 block mt-1 select-none">
+                      <span className="text-[10px] text-brand-dim/60 block mt-1">
                         * يتم احتسابه تلقائياً: مجموع المصاريف والتحويلات للزملاء.
                       </span>
                     </div>
@@ -1411,7 +1411,7 @@ export default function CplOperationsClient({
                             disabled={isPending}
                             value={editTotalCash !== "" ? editCashAfterExpenses.toFixed(2) : "0.00"}
                             placeholder="0.00"
-                            className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
+                            className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter cursor-not-allowed"
                           />
                           <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
                             <Coins size={16} />
@@ -1455,7 +1455,7 @@ export default function CplOperationsClient({
                             disabled={isPending}
                             value={editTotalCash !== "" ? computedEditMarketing2.toFixed(2) : "0.00"}
                             placeholder="0.00"
-                            className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
+                            className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter cursor-not-allowed"
                           />
                           <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
                             <Coins size={16} />
@@ -1499,7 +1499,7 @@ export default function CplOperationsClient({
                             disabled={isPending}
                             value={editTotalCash !== "" ? editTotalAmount.toFixed(2) : "0.00"}
                             placeholder="0.00"
-                            className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter select-none cursor-not-allowed"
+                            className="w-full bg-[#070814]/40 border border-brand-border/40 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white/60 focus:outline-none transition-all duration-300 text-left dir-ltr font-inter cursor-not-allowed"
                           />
                           <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none">
                             <ClipboardList size={16} />
@@ -1574,7 +1574,7 @@ export default function CplOperationsClient({
                                     onChange={(e) => updateEditTransferRow(idx, "amount", e.target.value)}
                                     className="w-full bg-[#070814] border border-brand-border rounded-xl pl-4 pr-9 py-3.5 text-xs text-white focus:outline-none focus:border-brand-accent transition-all text-left dir-ltr font-inter"
                                   />
-                                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none font-bold text-xs select-none">
+                                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none font-bold text-xs">
                                     $
                                   </span>
                                 </div>
@@ -1620,7 +1620,7 @@ export default function CplOperationsClient({
                 ) : (
                   /* Empty state placeholder when no date is selected or fetching failed */
                   !isFetchingReport && (
-                    <div className="border border-dashed border-brand-border/40 rounded-[24px] bg-brand-card/20 py-20 text-center select-none animate-fade-in mt-6">
+                    <div className="border border-dashed border-brand-border/40 rounded-[24px] bg-brand-card/20 py-20 text-center animate-fade-in mt-6">
                       <div className="flex flex-col items-center justify-center space-y-5 max-w-sm mx-auto">
                         <div className="w-14 h-14 rounded-2xl bg-white/[0.01] border border-brand-border/30 text-brand-dim/40 flex items-center justify-center shadow-inner">
                           <Calendar size={28} />
@@ -1712,11 +1712,11 @@ export default function CplOperationsClient({
                         {/* Special Campaign Row inside active wallets scroll area */}
                         <div className="px-4.5 py-2.5 rounded-xl bg-brand-accent/5 border border-brand-accent/40 hover:border-brand-accent/65 transition-all flex items-center justify-between gap-3 text-right">
                           <div className="flex items-center gap-2.5">
-                            <span className="relative flex h-2 w-2 select-none">
+                            <span className="relative flex h-2 w-2">
                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-accent opacity-75"></span>
                               <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-accent"></span>
                             </span>
-                            <span className="text-xs font-extrabold text-brand-accent flex items-center gap-1.5 select-none font-cairo">
+                            <span className="text-xs font-extrabold text-brand-accent flex items-center gap-1.5 font-cairo">
                               <Megaphone size={13} className="shrink-0 text-brand-accent" />
                               <span>كامبين</span>
                             </span>
@@ -1740,14 +1740,14 @@ export default function CplOperationsClient({
 
                       </div>
                     ) : (
-                      <div className="text-center py-8 text-xs text-brand-dim/40 select-none">
+                      <div className="text-center py-8 text-xs text-brand-dim/40">
                         لا توجد محافظ كاش مسجلة للعميل.
                       </div>
                     )}
                   </div>
 
                   {/* Summary displays */}
-                  <div className="border-t border-brand-border/25 pt-4 mt-4 space-y-2 select-none">
+                  <div className="border-t border-brand-border/25 pt-4 mt-4 space-y-2">
                     <div className="flex justify-between items-center text-xs font-semibold text-brand-dim">
                       <span>إجمالي كاش المحافظ:</span>
                       <span className="text-white font-inter font-bold">{editWalletsTotalCash.toLocaleString("en-US")} ج.م</span>

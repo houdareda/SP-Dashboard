@@ -355,7 +355,7 @@ export default function WalletsClient({ initialWallets, userRole }: WalletsClien
                 <button
                   type="button"
                   onClick={() => openEditModal(wallet)}
-                  className="p-1 hover:bg-white/5 rounded text-brand-accent transition-colors cursor-pointer select-none"
+                  className="p-1 hover:bg-white/5 rounded text-brand-accent transition-colors cursor-pointer"
                   title="تعديل المحفظة"
                 >
                   <Pencil size={11} />
@@ -394,7 +394,7 @@ export default function WalletsClient({ initialWallets, userRole }: WalletsClien
           </div>
 
           {/* Right: Switch Toggle */}
-          <div className="flex items-center gap-2 select-none">
+          <div className="flex items-center gap-2">
             <span
               className={`text-xs font-semibold transition-colors duration-200 ${
                 wallet.is_active ? "text-emerald-400" : "text-red-400"
@@ -507,7 +507,7 @@ export default function WalletsClient({ initialWallets, userRole }: WalletsClien
   };
 
   return (
-    <div className="space-y-8 font-cairo select-none relative text-right" dir="rtl">
+    <div className="space-y-8 font-cairo relative text-right" dir="rtl">
       {/* Toast Notification */}
       {toast && (
         <div
@@ -555,7 +555,7 @@ export default function WalletsClient({ initialWallets, userRole }: WalletsClien
               type="button"
               dir="rtl"
               onClick={() => setIsSortDropdownOpen(!isSortDropdownOpen)}
-              className={`flex items-center justify-between gap-3 px-4 py-2.5 bg-[#070814]/80 border rounded-xl text-sm text-brand-dim hover:text-white hover:border-brand-accent/50 transition-all cursor-pointer select-none relative z-20 min-w-[140px] ${
+              className={`flex items-center justify-between gap-3 px-4 py-2.5 bg-[#070814]/80 border rounded-xl text-sm text-brand-dim hover:text-white hover:border-brand-accent/50 transition-all cursor-pointer relative z-20 min-w-[140px] ${
                 isSortDropdownOpen ? "border-brand-accent text-white ring-1 ring-brand-glow/20" : "border-brand-border/80"
               }`}
             >
@@ -748,7 +748,7 @@ export default function WalletsClient({ initialWallets, userRole }: WalletsClien
             </div>
           ) : (
             /* Empty State for Active Wallets */
-            <div className="backdrop-blur-xl bg-brand-card/50 border border-brand-border rounded-[24px] py-12 text-center select-none">
+            <div className="backdrop-blur-xl bg-brand-card/50 border border-brand-border rounded-[24px] py-12 text-center">
               <div className="flex flex-col items-center justify-center space-y-4 max-w-sm mx-auto">
                 <div className="w-12 h-12 rounded-xl bg-white/[0.02] border border-brand-border/40 text-brand-dim/50 flex items-center justify-center shadow-inner">
                   <Wallet size={24} />

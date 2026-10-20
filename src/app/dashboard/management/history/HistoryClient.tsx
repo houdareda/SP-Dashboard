@@ -409,7 +409,7 @@ export default function HistoryClient({
     }
 
     return (
-      <div className="flex flex-col items-center justify-center gap-1 select-none">
+      <div className="flex flex-col items-center justify-center gap-1">
         <span className={`inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold rounded-full transition-all duration-200 ${badgeClass}`}>
           {badgeText}
         </span>
@@ -424,7 +424,7 @@ export default function HistoryClient({
 
   // Render Empty State Component
   const renderEmptyState = (message: string, IconComponent: any) => (
-    <div className="text-center py-20 text-brand-dim/40 flex flex-col items-center justify-center gap-3 animate-fade-in select-none">
+    <div className="text-center py-20 text-brand-dim/40 flex flex-col items-center justify-center gap-3 animate-fade-in">
       <IconComponent size={40} className="opacity-20 text-brand-accent animate-pulse" />
       <span className="text-sm font-bold text-brand-dim/50">{message}</span>
       <button
@@ -446,7 +446,7 @@ export default function HistoryClient({
     if (totalPages <= 1) return null;
 
     return (
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-brand-border/20 select-none" dir="rtl">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-brand-border/20" dir="rtl">
         <span className="text-xs text-brand-dim/60">
           إجمالي السجلات: <span className="text-white font-bold font-inter">{totalCount}</span>
         </span>
@@ -479,7 +479,7 @@ export default function HistoryClient({
   };
 
   return (
-    <div className="space-y-6 text-right font-cairo select-none" dir="rtl">
+    <div className="space-y-6 text-right font-cairo" dir="rtl">
       {/* Page Title */}
       <div className="flex flex-col gap-1 text-right">
         <h1 className="text-2xl md:text-3xl font-extrabold text-white">سجل العمليات العام</h1>
@@ -500,7 +500,7 @@ export default function HistoryClient({
               setIsStatusDropdownOpen(false);
               setIsWalletDropdownOpen(false);
             }}
-            className="w-full h-10 px-3.5 rounded-xl bg-[#070912] border border-brand-border/60 text-white text-xs focus:outline-none focus:border-brand-accent transition-all cursor-pointer flex items-center justify-between select-none"
+            className="w-full h-10 px-3.5 rounded-xl bg-[#070912] border border-brand-border/60 text-white text-xs focus:outline-none focus:border-brand-accent transition-all cursor-pointer flex items-center justify-between"
           >
             <span className="text-white text-xs font-cairo text-right">
               {selectedAgentIds.length === 0
@@ -604,7 +604,7 @@ export default function HistoryClient({
                 setIsWalletDropdownOpen(false);
                 setIsAgentDropdownOpen(false);
               }}
-              className="w-full h-10 px-3.5 rounded-xl bg-[#070912] border border-brand-border/60 text-white text-xs focus:outline-none focus:border-brand-accent transition-all cursor-pointer flex items-center justify-between select-none"
+              className="w-full h-10 px-3.5 rounded-xl bg-[#070912] border border-brand-border/60 text-white text-xs focus:outline-none focus:border-brand-accent transition-all cursor-pointer flex items-center justify-between"
             >
               <span className="text-white text-xs font-cairo">
                 {selectedStatus === "all"
@@ -660,7 +660,7 @@ export default function HistoryClient({
                 setIsStatusDropdownOpen(false);
                 setIsAgentDropdownOpen(false);
               }}
-              className="w-full h-10 px-3.5 rounded-xl bg-[#070912] border border-brand-border/60 text-white text-xs focus:outline-none focus:border-brand-accent transition-all cursor-pointer flex items-center justify-between select-none"
+              className="w-full h-10 px-3.5 rounded-xl bg-[#070912] border border-brand-border/60 text-white text-xs focus:outline-none focus:border-brand-accent transition-all cursor-pointer flex items-center justify-between"
             >
               <span className={`text-white text-xs font-cairo ${selectedWallets.length === 1 ? "font-mono" : ""}`}>
                 {selectedWallets.length === 0 ? "كل المحافظ" : `${selectedWallets.length} محفظة`}
@@ -805,7 +805,7 @@ export default function HistoryClient({
               <div className="relative w-16 h-16 flex items-center justify-center">
                 <div className="absolute inset-0 rounded-full border-2 border-brand-accent/10 border-t-brand-accent border-r-brand-accent/50 animate-spin" style={{ animationDuration: "1s" }} />
                 <div className="w-8 h-8 rounded-lg bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center shadow-[0_0_20px_rgba(139,92,246,0.25)] animate-pulse">
-                  <span className="text-white text-[10px] font-bold font-inter select-none">SP</span>
+                  <span className="text-white text-[10px] font-bold font-inter">SP</span>
                 </div>
               </div>
               <div className="space-y-1">
@@ -852,7 +852,7 @@ export default function HistoryClient({
                         <td className="py-4 font-mono font-bold text-white/90">
                           {req.is_multi_wallet ? (
                             <div className="space-y-0.5 text-right font-cairo">
-                              <span className="inline-block px-1.5 py-0.5 text-[8.5px] font-extrabold bg-brand-accent/20 text-brand-accent border border-brand-accent/30 rounded-md mb-1 select-none">
+                              <span className="inline-block px-1.5 py-0.5 text-[8.5px] font-extrabold bg-brand-accent/20 text-brand-accent border border-brand-accent/30 rounded-md mb-1">
                                 متعدد المحافظ
                               </span>
                               {Array.isArray(req.multi_wallet_data) ? (
@@ -960,7 +960,7 @@ export default function HistoryClient({
                       <tr
                         key={exp.id}
                         onClick={() => openExpenseDetailModal(exp)}
-                        className="border-b border-brand-border/20 text-xs text-white/80 hover:bg-white/[0.02] transition-colors cursor-pointer active:scale-[0.99] select-none"
+                        className="border-b border-brand-border/20 text-xs text-white/80 hover:bg-white/[0.02] transition-colors cursor-pointer active:scale-[0.99]"
                       >
                         <td className="py-4 pr-2 font-bold text-brand-accent capitalize">
                           {exp.agent?.full_name || "-"}
@@ -1306,7 +1306,7 @@ export default function HistoryClient({
                       <span>جاري تحميل التحويلات...</span>
                     </div>
                   ) : expenseTransfers.length === 0 ? (
-                    <div className="text-xs text-brand-dim/50 py-3 bg-[#070814]/20 rounded-xl text-center select-none">
+                    <div className="text-xs text-brand-dim/50 py-3 bg-[#070814]/20 rounded-xl text-center">
                       لم يتم تسجيل أي تحويلات عهدة للزملاء في هذا اليوم.
                     </div>
                   ) : (
@@ -1327,7 +1327,7 @@ export default function HistoryClient({
               {selectedExpense.wallets_balances && selectedExpense.wallets_balances.length > 0 && (
                 <div className="lg:col-span-1 bg-[#090b16]/95 border border-brand-border/40 p-5 rounded-2xl flex flex-col justify-between min-h-[350px]">
                   <div>
-                    <h4 className="text-xs font-bold text-white border-b border-brand-border/20 pb-2.5 mb-3 flex items-center gap-2 select-none">
+                    <h4 className="text-xs font-bold text-white border-b border-brand-border/20 pb-2.5 mb-3 flex items-center gap-2">
                       <Wallet size={14} className="text-brand-accent" />
                       <span>رصيد كاش المحافظ المسجل (Snapshot)</span>
                     </h4>
@@ -1374,7 +1374,7 @@ export default function HistoryClient({
                           </div>
 
                           {/* Totals */}
-                          <div className="border-t border-brand-border/20 pt-3 mt-3 space-y-2 select-none">
+                          <div className="border-t border-brand-border/20 pt-3 mt-3 space-y-2">
                             <div className="flex justify-between items-center text-[11px] font-semibold text-brand-dim">
                               <span>إجمالي كاش المحافظ:</span>
                               <span className="text-white font-inter font-bold">
@@ -1398,7 +1398,7 @@ export default function HistoryClient({
             </div>
 
             {/* Footer Action */}
-            <div className="pt-4 border-t border-brand-border/10 mt-6 select-none">
+            <div className="pt-4 border-t border-brand-border/10 mt-6">
               <button
                 onClick={() => setSelectedExpense(null)}
                 type="button"
