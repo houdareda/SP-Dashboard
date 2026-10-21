@@ -36,13 +36,21 @@ export default async function HistoryManagementPage() {
     redirect("/dashboard?error=unauthorized");
   }
 
+  const isAccountant = profile.role === "accountant";
+
   // 3. Fetch initial paginated data for admin/senior and marketing systems
   const [fundRes, expenseRes, editRes, transferRes, marketingSystems] = await Promise.all([
     getAdminFundRequestsPaginated({ page: 1, limit: 20 }),
-    getAdminDailyExpensesPaginated({ page: 1, limit: 20 }),
-    getAdminEditRequestsPaginated({ page: 1, limit: 20 }),
-    getAdminCustodyTransfersPaginated({ page: 1, limit: 20 }),
-    getMarketingSystems(),
+    isAccountant
+      ? Promise.resolve({ success: true, data: [], totalCount: 0 })
+      : getAdminDailyExpensesPaginated({ page: 1, limit: 20 }),
+    isAccountant
+      ? Promise.resolve({ success: true, data: [], totalCount: 0 })
+      : getAdminEditRequestsPaginated({ page: 1, limit: 20 }),
+    isAccountant
+      ? Promise.resolve({ success: true, data: [], totalCount: 0 })
+      : getAdminCustodyTransfersPaginated({ page: 1, limit: 20 }),
+    isAccountant ? Promise.resolve([]) : getMarketingSystems(),
   ]);
 
   // 4. Fetch all active employees (agents/senior agents) for filters
@@ -57,6 +65,7 @@ export default async function HistoryManagementPage() {
     <HistoryClient
       initialFundRequests={fundRes.success && fundRes.data ? fundRes.data : []}
       initialFundCount={fundRes.success && fundRes.totalCount !== undefined ? fundRes.totalCount : 0}
+      initialFundSummary={fundRes.summary}
       initialDailyExpenses={expenseRes.success && expenseRes.data ? expenseRes.data : []}
       initialExpenseCount={expenseRes.success && expenseRes.totalCount !== undefined ? expenseRes.totalCount : 0}
       initialEditRequests={editRes.success && editRes.data ? editRes.data : []}
@@ -65,6 +74,7 @@ export default async function HistoryManagementPage() {
       initialTransferCount={transferRes.success && transferRes.totalCount !== undefined ? transferRes.totalCount : 0}
       employees={employees || []}
       marketingSystems={marketingSystems}
+      userRole={profile.role}
     />
   );
 }

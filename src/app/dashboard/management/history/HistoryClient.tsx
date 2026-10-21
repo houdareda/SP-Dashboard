@@ -6,6 +6,7 @@ import {
   ClipboardList,
   FileEdit,
   Calendar,
+  Clock,
   AlertCircle,
   RotateCcw,
   User,
@@ -33,6 +34,16 @@ import { MarketingSystem } from "@/app/actions/marketingSystems";
 interface HistoryClientProps {
   initialFundRequests: any[];
   initialFundCount: number;
+  initialFundSummary?: {
+    totalTransferred: number;
+    approvedCount: number;
+    recipients: Array<{
+      agentId: string;
+      agentName: string;
+      totalAmount: number;
+      count: number;
+    }>;
+  };
   initialDailyExpenses: any[];
   initialExpenseCount: number;
   initialEditRequests: any[];
@@ -41,6 +52,7 @@ interface HistoryClientProps {
   initialTransferCount?: number;
   employees: any[];
   marketingSystems?: MarketingSystem[];
+  userRole?: string;
 }
 
 type TabType = "fund-requests" | "daily-expenses" | "edit-requests" | "custody-transfers";
@@ -48,6 +60,7 @@ type TabType = "fund-requests" | "daily-expenses" | "edit-requests" | "custody-t
 export default function HistoryClient({
   initialFundRequests = [],
   initialFundCount = 0,
+  initialFundSummary,
   initialDailyExpenses = [],
   initialExpenseCount = 0,
   initialEditRequests = [],
@@ -56,6 +69,7 @@ export default function HistoryClient({
   initialTransferCount = 0,
   employees = [],
   marketingSystems = [],
+  userRole,
 }: HistoryClientProps) {
   const [activeTab, setActiveTab] = useState<TabType>("fund-requests");
 
@@ -103,8 +117,11 @@ export default function HistoryClient({
   useEffect(() => {
     setFundRequests(initialFundRequests);
     setFundCount(initialFundCount);
+    if (initialFundSummary) {
+      setFundSummary(initialFundSummary);
+    }
     setFundPage(1);
-  }, [initialFundRequests, initialFundCount]);
+  }, [initialFundRequests, initialFundCount, initialFundSummary]);
 
   useEffect(() => {
     setDailyExpenses(initialDailyExpenses);
@@ -125,12 +142,87 @@ export default function HistoryClient({
   }, [initialCustodyTransfers, initialTransferCount]);
 
   // Filters State
+  // 1. Manual Transaction Date ("التاريخ" - request_date)
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
+
+  // 2. Action Timestamp in System ("توقيت الإجراء" - approved_at)
+  const [actionStartDate, setActionStartDate] = useState<string>("");
+  const [actionEndDate, setActionEndDate] = useState<string>("");
+
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [selectedWallets, setSelectedWallets] = useState<string[]>([]);
   const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([]);
   const [walletsList, setWalletsList] = useState<string[]>([]);
+  const [fundSummary, setFundSummary] = useState<any>(
+    initialFundSummary || { totalTransferred: 0, approvedCount: 0, recipients: [] }
+  );
+
+  // Quick date setter helper
+  const handleSetQuickDate = (
+    target: "manual" | "action",
+    type: "today" | "yesterday" | "thisMonth" | "clear"
+  ) => {
+    if (type === "clear") {
+      if (target === "manual") {
+        setStartDate("");
+        setEndDate("");
+      } else {
+        setActionStartDate("");
+        setActionEndDate("");
+      }
+      return;
+    }
+
+    const egyptParts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Africa/Cairo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date()).split("-");
+
+    const todayStr = `${egyptParts[0]}-${egyptParts[1]}-${egyptParts[2]}`;
+
+    let sDate = "";
+    let eDate = "";
+
+    if (type === "today") {
+      sDate = todayStr;
+      eDate = todayStr;
+    } else if (type === "yesterday") {
+      const d = new Date();
+      d.setDate(d.getDate() - 1);
+      const yParts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Africa/Cairo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(d).split("-");
+      sDate = `${yParts[0]}-${yParts[1]}-${yParts[2]}`;
+      eDate = sDate;
+    } else if (type === "thisMonth") {
+      sDate = `${egyptParts[0]}-${egyptParts[1]}-01`;
+      eDate = todayStr;
+    }
+
+    if (target === "manual") {
+      if (startDate === sDate && endDate === eDate) {
+        setStartDate("");
+        setEndDate("");
+      } else {
+        setStartDate(sDate);
+        setEndDate(eDate);
+      }
+    } else {
+      if (actionStartDate === sDate && actionEndDate === eDate) {
+        setActionStartDate("");
+        setActionEndDate("");
+      } else {
+        setActionStartDate(sDate);
+        setActionEndDate(eDate);
+      }
+    }
+  };
 
   // Refresh Triggers for Realtime updates
   const [fundRefresh, setFundRefresh] = useState(0);
@@ -168,6 +260,8 @@ export default function HistoryClient({
         limit: 20,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
+        actionStartDate: actionStartDate || undefined,
+        actionEndDate: actionEndDate || undefined,
         status: selectedStatus,
         agentIds: selectedAgentIds.length > 0 ? selectedAgentIds : undefined,
         walletPhoneNumbers: selectedWallets.length > 0 ? selectedWallets : undefined,
@@ -176,6 +270,9 @@ export default function HistoryClient({
         if (res.success && res.data) {
           setFundRequests(res.data);
           setFundCount(res.totalCount);
+          if (res.summary) {
+            setFundSummary(res.summary);
+          }
         }
         setIsLoading(false);
       }
@@ -184,7 +281,7 @@ export default function HistoryClient({
     return () => {
       isCurrent = false;
     };
-  }, [fundPage, startDate, endDate, selectedStatus, selectedWallets, selectedAgentIds, fundRefresh]);
+  }, [fundPage, startDate, endDate, actionStartDate, actionEndDate, selectedStatus, selectedWallets, selectedAgentIds, fundRefresh]);
 
   // Fetch paginated & filtered Daily Expenses
   useEffect(() => {
@@ -285,7 +382,7 @@ export default function HistoryClient({
     setFundPage(1);
     setExpensePage(1);
     setEditPage(1);
-  }, [startDate, endDate, selectedStatus, selectedWallets, selectedAgentIds]);
+  }, [startDate, endDate, actionStartDate, actionEndDate, selectedStatus, selectedWallets, selectedAgentIds]);
 
   // Subscribe to real-time updates from Supabase to silently trigger refetching
   useEffect(() => {
@@ -297,27 +394,32 @@ export default function HistoryClient({
         () => {
           setFundRefresh((prev) => prev + 1);
         }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "daily_expenses" },
-        () => {
-          setExpenseRefresh((prev) => prev + 1);
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "edit_expense_requests" },
-        () => {
-          setEditRefresh((prev) => prev + 1);
-        }
-      )
-      .subscribe();
+      );
+
+    if (userRole !== "accountant") {
+      channel
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "daily_expenses" },
+          () => {
+            setExpenseRefresh((prev) => prev + 1);
+          }
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "edit_expense_requests" },
+          () => {
+            setEditRefresh((prev) => prev + 1);
+          }
+        );
+    }
+
+    channel.subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [userRole]);
 
   // Dropdown Toggles and Refs
   const statusDropdownRef = React.useRef<HTMLDivElement>(null);
@@ -348,9 +450,14 @@ export default function HistoryClient({
   // Helpers
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "-";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const [year, month, day] = dateStr.split("-");
+      return `${year}/${month}/${day}`;
+    }
     try {
       const d = new Date(dateStr);
       return d.toLocaleDateString("ar-EG-u-nu-latn", {
+        timeZone: "Africa/Cairo",
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
@@ -365,6 +472,7 @@ export default function HistoryClient({
     try {
       const d = new Date(dateStr);
       return d.toLocaleString("ar-EG-u-nu-latn", {
+        timeZone: "Africa/Cairo",
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
@@ -380,10 +488,22 @@ export default function HistoryClient({
   const handleResetFilters = () => {
     setStartDate("");
     setEndDate("");
+    setActionStartDate("");
+    setActionEndDate("");
     setSelectedStatus("all");
     setSelectedWallets([]);
     setSelectedAgentIds([]);
   };
+
+  const hasActiveFilters = Boolean(
+    startDate ||
+    endDate ||
+    actionStartDate ||
+    actionEndDate ||
+    selectedStatus !== "all" ||
+    selectedWallets.length > 0 ||
+    selectedAgentIds.length > 0
+  );
 
   // Helper to render status badge with reviewer name displayed inline below it
   const renderStatusBadge = (
@@ -478,6 +598,32 @@ export default function HistoryClient({
     );
   };
 
+  const getEgyptToday = () => {
+    const egyptParts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Africa/Cairo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date()).split("-");
+    return `${egyptParts[0]}-${egyptParts[1]}-${egyptParts[2]}`;
+  };
+
+  const getEgyptYesterday = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    const yParts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Africa/Cairo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(d).split("-");
+    return `${yParts[0]}-${yParts[1]}-${yParts[2]}`;
+  };
+
+  const todayStr = getEgyptToday();
+  const yesterdayStr = getEgyptYesterday();
+  const startOfMonthStr = `${todayStr.slice(0, 7)}-01`;
+
   return (
     <div className="space-y-6 text-right font-cairo" dir="rtl">
       {/* Page Title */}
@@ -487,200 +633,45 @@ export default function HistoryClient({
       </div>
 
       {/* Filters Toolbar */}
-      <div className="bg-[#0c0f1d] border border-brand-border/40 p-4 rounded-2xl flex flex-wrap items-end gap-5 w-full">
-        
-        {/* Agent Filter */}
-        <div className="space-y-1 w-full sm:w-[210px] relative" ref={agentDropdownRef}>
-          <label className="text-[10px] font-bold text-brand-dim/60 block pr-1 font-cairo">الموظف</label>
-          <button
-            type="button"
-            dir="rtl"
-            onClick={() => {
-              setIsAgentDropdownOpen(!isAgentDropdownOpen);
-              setIsStatusDropdownOpen(false);
-              setIsWalletDropdownOpen(false);
-            }}
-            className="w-full h-10 px-3.5 rounded-xl bg-[#070912] border border-brand-border/60 text-white text-xs focus:outline-none focus:border-brand-accent transition-all cursor-pointer flex items-center justify-between"
-          >
-            <span className="text-white text-xs font-cairo text-right">
-              {selectedAgentIds.length === 0
-                ? "الكل (جميع الموظفين)"
-                : selectedAgentIds.length === 1
-                ? employees.find((e) => e.id === selectedAgentIds[0])?.full_name || "موظف محدد"
-                : `الموظفون المختارون (${selectedAgentIds.length})`}
-            </span>
-            <ChevronDown size={14} className={`text-white/40 transition-transform duration-200 ${isAgentDropdownOpen ? "rotate-180 text-brand-accent" : ""}`} />
-          </button>
-
-          {isAgentDropdownOpen && (
-            <div className="absolute right-0 left-0 mt-2 bg-[#0c0e18]/95 backdrop-blur-xl border border-brand-border/80 rounded-xl shadow-2xl p-3 z-[9999] animate-scale-in text-right max-h-56 overflow-y-auto custom-scrollbar" dir="rtl">
-              <span className="block text-xs font-semibold text-brand-dim/60 mb-2 border-b border-brand-border/20 pb-1.5 font-cairo">تصفية حسب الموظف</span>
-              <button
-                type="button"
-                dir="rtl"
-                onClick={() => {
-                  setSelectedAgentIds([]);
-                }}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer text-brand-accent hover:text-brand-accent/80 font-bold font-cairo"
-              >
-                <span className="text-xs text-right">تحديد الكل</span>
-                {selectedAgentIds.length === 0 || selectedAgentIds.length === employees.length ? (
-                  <div className="w-4 h-4 rounded border border-brand-accent bg-brand-accent/20 flex items-center justify-center shrink-0">
-                    <Check size={12} className="text-brand-accent stroke-[3]" />
-                  </div>
-                ) : (
-                  <div className="w-4 h-4 rounded border border-white/25 bg-white/[0.02] shrink-0" />
-                )}
-              </button>
-
-              <div className="border-t border-brand-border/10 my-1.5" />
-
-              <div className="space-y-0.5">
-                {employees.map((emp) => {
-                  const isChecked = selectedAgentIds.includes(emp.id);
-                  return (
-                    <button
-                      key={emp.id}
-                      type="button"
-                      dir="rtl"
-                      onClick={() => {
-                        if (isChecked) {
-                          setSelectedAgentIds(selectedAgentIds.filter((id) => id !== emp.id));
-                        } else {
-                          setSelectedAgentIds([...selectedAgentIds, emp.id]);
-                        }
-                      }}
-                      className="flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer text-white/80 transition-colors w-full"
-                    >
-                      <span className="text-xs font-semibold text-right">{emp.full_name}</span>
-                      {isChecked ? (
-                        <div className="w-4 h-4 rounded border border-brand-accent bg-brand-accent/20 flex items-center justify-center shrink-0">
-                          <Check size={12} className="text-brand-accent stroke-[3]" />
-                        </div>
-                      ) : (
-                        <div className="w-4 h-4 rounded border border-white/25 bg-white/[0.02] shrink-0" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Start Date */}
-        <div className="space-y-1 w-full sm:w-[170px]">
-          <label className="text-[10px] font-bold text-brand-dim/60 block pr-1 font-cairo">تاريخ البدء (من)</label>
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            onClick={(e) => e.currentTarget.showPicker()}
-            className="w-full h-10 px-3 rounded-xl bg-[#070912] border border-brand-border/60 text-white font-inter text-xs focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/20 transition-all cursor-pointer"
-          />
-        </div>
-
-        {/* End Date */}
-        <div className="space-y-1 w-full sm:w-[170px]">
-          <label className="text-[10px] font-bold text-brand-dim/60 block pr-1 font-cairo">تاريخ الانتهاء (إلى)</label>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            onClick={(e) => e.currentTarget.showPicker()}
-            className="w-full h-10 px-3 rounded-xl bg-[#070912] border border-brand-border/60 text-white font-inter text-xs focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/20 transition-all cursor-pointer"
-          />
-        </div>
-
-        {/* Status Dropdown */}
-        {activeTab !== "daily-expenses" && (
-          <div className="space-y-1 w-full sm:w-[180px] relative" ref={statusDropdownRef}>
-            <label className="text-[10px] font-bold text-brand-dim/60 block pr-1 font-cairo">حالة الطلب</label>
+      <div className="bg-[#0c0f1d] border border-brand-border/40 p-5 rounded-2xl space-y-4 w-full">
+        {/* Row 1: General Filters (Agent, Status, Wallet, and Clear All) */}
+        <div className="flex flex-wrap items-end gap-4 w-full">
+          {/* Agent Filter */}
+          <div className="space-y-1 w-full sm:w-[210px] relative" ref={agentDropdownRef}>
+            <label className="text-[10px] font-bold text-brand-dim/60 block pr-1 font-cairo">الموظف</label>
             <button
               type="button"
               dir="rtl"
               onClick={() => {
-                setIsStatusDropdownOpen(!isStatusDropdownOpen);
-                setIsWalletDropdownOpen(false);
-                setIsAgentDropdownOpen(false);
-              }}
-              className="w-full h-10 px-3.5 rounded-xl bg-[#070912] border border-brand-border/60 text-white text-xs focus:outline-none focus:border-brand-accent transition-all cursor-pointer flex items-center justify-between"
-            >
-              <span className="text-white text-xs font-cairo">
-                {selectedStatus === "all"
-                  ? "كل الحالات"
-                  : selectedStatus === "pending"
-                  ? "قيد المراجعة"
-                  : selectedStatus === "approved"
-                  ? "تمت الموافقة"
-                  : "مرفوض"}
-              </span>
-              <ChevronDown size={14} className={`text-white/40 transition-transform duration-200 ${isStatusDropdownOpen ? "rotate-180 text-brand-accent" : ""}`} />
-            </button>
-
-            {isStatusDropdownOpen && (
-              <div className="absolute right-0 left-0 mt-2 bg-[#0c0e18] border border-brand-border/80 rounded-xl shadow-2xl p-1.5 z-[9999] animate-scale-in text-right">
-                {[
-                  { value: "all", label: "كل الحالات" },
-                  { value: "pending", label: "قيد المراجعة" },
-                  { value: "approved", label: "تمت الموافقة" },
-                  { value: "rejected", label: "مرفوض" },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    dir="rtl"
-                    onClick={() => {
-                      setSelectedStatus(opt.value);
-                      setIsStatusDropdownOpen(false);
-                    }}
-                    className={`w-full px-3 py-2 rounded-lg text-right text-xs transition-colors block cursor-pointer font-cairo ${
-                      selectedStatus === opt.value
-                        ? "text-brand-accent bg-brand-accent/15 font-bold"
-                        : "text-white/80 hover:bg-white/5"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Wallet Dropdown */}
-        {activeTab === "fund-requests" && (
-          <div className="space-y-1 w-full sm:w-[180px] relative" ref={walletDropdownRef}>
-            <label className="text-[10px] font-bold text-brand-dim/60 block pr-1 font-cairo">المحفظة</label>
-            <button
-              type="button"
-              dir="rtl"
-              onClick={() => {
-                setIsWalletDropdownOpen(!isWalletDropdownOpen);
+                setIsAgentDropdownOpen(!isAgentDropdownOpen);
                 setIsStatusDropdownOpen(false);
-                setIsAgentDropdownOpen(false);
+                setIsWalletDropdownOpen(false);
               }}
               className="w-full h-10 px-3.5 rounded-xl bg-[#070912] border border-brand-border/60 text-white text-xs focus:outline-none focus:border-brand-accent transition-all cursor-pointer flex items-center justify-between"
             >
-              <span className={`text-white text-xs font-cairo ${selectedWallets.length === 1 ? "font-mono" : ""}`}>
-                {selectedWallets.length === 0 ? "كل المحافظ" : `${selectedWallets.length} محفظة`}
+              <span className="text-white text-xs font-cairo text-right">
+                {selectedAgentIds.length === 0
+                  ? "الكل (جميع الموظفين)"
+                  : selectedAgentIds.length === 1
+                  ? employees.find((e) => e.id === selectedAgentIds[0])?.full_name || "موظف محدد"
+                  : `الموظفون المختارون (${selectedAgentIds.length})`}
               </span>
-              <ChevronDown size={14} className={`text-white/40 transition-transform duration-200 ${isWalletDropdownOpen ? "rotate-180 text-brand-accent" : ""}`} />
+              <ChevronDown size={14} className={`text-white/40 transition-transform duration-200 ${isAgentDropdownOpen ? "rotate-180 text-brand-accent" : ""}`} />
             </button>
 
-            {isWalletDropdownOpen && (
-              <div className="absolute right-0 left-0 mt-2 bg-[#0c0e18] border border-brand-border/80 rounded-xl shadow-2xl p-3 z-[9999] animate-scale-in text-right max-h-56 overflow-y-auto custom-scrollbar" dir="rtl">
-                <span className="block text-xs font-semibold text-brand-dim/60 mb-2 border-b border-brand-border/20 pb-1.5 font-cairo">تصفية حسب المحفظة</span>
+            {isAgentDropdownOpen && (
+              <div className="absolute right-0 left-0 mt-2 bg-[#0c0e18]/95 backdrop-blur-xl border border-brand-border/80 rounded-xl shadow-2xl p-3 z-[9999] animate-scale-in text-right max-h-56 overflow-y-auto custom-scrollbar" dir="rtl">
+                <span className="block text-xs font-semibold text-brand-dim/60 mb-2 border-b border-brand-border/20 pb-1.5 font-cairo">تصفية حسب الموظف</span>
                 <button
                   type="button"
                   dir="rtl"
                   onClick={() => {
-                    setSelectedWallets([]);
+                    setSelectedAgentIds([]);
                   }}
                   className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer text-brand-accent hover:text-brand-accent/80 font-bold font-cairo"
                 >
                   <span className="text-xs text-right">تحديد الكل</span>
-                  {selectedWallets.length === 0 || selectedWallets.length === walletsList.length ? (
+                  {selectedAgentIds.length === 0 || selectedAgentIds.length === employees.length ? (
                     <div className="w-4 h-4 rounded border border-brand-accent bg-brand-accent/20 flex items-center justify-center shrink-0">
                       <Check size={12} className="text-brand-accent stroke-[3]" />
                     </div>
@@ -692,24 +683,24 @@ export default function HistoryClient({
                 <div className="border-t border-brand-border/10 my-1.5" />
 
                 <div className="space-y-0.5">
-                  {walletsList.map((ph) => {
-                    const isSelected = selectedWallets.includes(ph);
+                  {employees.map((emp) => {
+                    const isChecked = selectedAgentIds.includes(emp.id);
                     return (
                       <button
-                        key={ph}
+                        key={emp.id}
                         type="button"
                         dir="rtl"
                         onClick={() => {
-                          if (isSelected) {
-                            setSelectedWallets(selectedWallets.filter((w) => w !== ph));
+                          if (isChecked) {
+                            setSelectedAgentIds(selectedAgentIds.filter((id) => id !== emp.id));
                           } else {
-                            setSelectedWallets([...selectedWallets, ph]);
+                            setSelectedAgentIds([...selectedAgentIds, emp.id]);
                           }
                         }}
                         className="flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer text-white/80 transition-colors w-full"
                       >
-                        <span className="text-xs font-mono text-right">{ph}</span>
-                        {isSelected ? (
+                        <span className="text-xs font-semibold text-right">{emp.full_name}</span>
+                        {isChecked ? (
                           <div className="w-4 h-4 rounded border border-brand-accent bg-brand-accent/20 flex items-center justify-center shrink-0">
                             <Check size={12} className="text-brand-accent stroke-[3]" />
                           </div>
@@ -723,79 +714,443 @@ export default function HistoryClient({
               </div>
             )}
           </div>
-        )}
 
-        {/* Clear Filters Button */}
-        {(startDate || endDate || selectedStatus !== "all" || selectedWallets.length > 0 || selectedAgentIds.length > 0) && (
+          {/* Status Dropdown */}
+          {activeTab !== "daily-expenses" && (
+            <div className="space-y-1 w-full sm:w-[180px] relative" ref={statusDropdownRef}>
+              <label className="text-[10px] font-bold text-brand-dim/60 block pr-1 font-cairo">حالة الطلب</label>
+              <button
+                type="button"
+                dir="rtl"
+                onClick={() => {
+                  setIsStatusDropdownOpen(!isStatusDropdownOpen);
+                  setIsWalletDropdownOpen(false);
+                  setIsAgentDropdownOpen(false);
+                }}
+                className="w-full h-10 px-3.5 rounded-xl bg-[#070912] border border-brand-border/60 text-white text-xs focus:outline-none focus:border-brand-accent transition-all cursor-pointer flex items-center justify-between"
+              >
+                <span className="text-white text-xs font-cairo">
+                  {selectedStatus === "all"
+                    ? "كل الحالات"
+                    : selectedStatus === "pending"
+                    ? "قيد المراجعة"
+                    : selectedStatus === "approved"
+                    ? "تمت الموافقة"
+                    : "مرفوض"}
+                </span>
+                <ChevronDown size={14} className={`text-white/40 transition-transform duration-200 ${isStatusDropdownOpen ? "rotate-180 text-brand-accent" : ""}`} />
+              </button>
+
+              {isStatusDropdownOpen && (
+                <div className="absolute right-0 left-0 mt-2 bg-[#0c0e18] border border-brand-border/80 rounded-xl shadow-2xl p-1.5 z-[9999] animate-scale-in text-right">
+                  {[
+                    { value: "all", label: "كل الحالات" },
+                    { value: "pending", label: "قيد المراجعة" },
+                    { value: "approved", label: "تمت الموافقة" },
+                    { value: "rejected", label: "مرفوض" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      dir="rtl"
+                      onClick={() => {
+                        setSelectedStatus(opt.value);
+                        setIsStatusDropdownOpen(false);
+                      }}
+                      className={`w-full px-3 py-2 rounded-lg text-right text-xs transition-colors block cursor-pointer font-cairo ${
+                        selectedStatus === opt.value
+                          ? "text-brand-accent bg-brand-accent/15 font-bold"
+                          : "text-white/80 hover:bg-white/5"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Wallet Dropdown */}
+          {activeTab === "fund-requests" && (
+            <div className="space-y-1 w-full sm:w-[180px] relative" ref={walletDropdownRef}>
+              <label className="text-[10px] font-bold text-brand-dim/60 block pr-1 font-cairo">المحفظة</label>
+              <button
+                type="button"
+                dir="rtl"
+                onClick={() => {
+                  setIsWalletDropdownOpen(!isWalletDropdownOpen);
+                  setIsStatusDropdownOpen(false);
+                  setIsAgentDropdownOpen(false);
+                }}
+                className="w-full h-10 px-3.5 rounded-xl bg-[#070912] border border-brand-border/60 text-white text-xs focus:outline-none focus:border-brand-accent transition-all cursor-pointer flex items-center justify-between"
+              >
+                <span className={`text-white text-xs font-cairo ${selectedWallets.length === 1 ? "font-mono" : ""}`}>
+                  {selectedWallets.length === 0 ? "كل المحافظ" : `${selectedWallets.length} محفظة`}
+                </span>
+                <ChevronDown size={14} className={`text-white/40 transition-transform duration-200 ${isWalletDropdownOpen ? "rotate-180 text-brand-accent" : ""}`} />
+              </button>
+
+              {isWalletDropdownOpen && (
+                <div className="absolute right-0 left-0 mt-2 bg-[#0c0e18] border border-brand-border/80 rounded-xl shadow-2xl p-3 z-[9999] animate-scale-in text-right max-h-56 overflow-y-auto custom-scrollbar" dir="rtl">
+                  <span className="block text-xs font-semibold text-brand-dim/60 mb-2 border-b border-brand-border/20 pb-1.5 font-cairo">تصفية حسب المحفظة</span>
+                  <button
+                    type="button"
+                    dir="rtl"
+                    onClick={() => {
+                      setSelectedWallets([]);
+                    }}
+                    className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer text-brand-accent hover:text-brand-accent/80 font-bold font-cairo"
+                  >
+                    <span className="text-xs text-right">تحديد الكل</span>
+                    {selectedWallets.length === 0 || selectedWallets.length === walletsList.length ? (
+                      <div className="w-4 h-4 rounded border border-brand-accent bg-brand-accent/20 flex items-center justify-center shrink-0">
+                        <Check size={12} className="text-brand-accent stroke-[3]" />
+                      </div>
+                    ) : (
+                      <div className="w-4 h-4 rounded border border-white/25 bg-white/[0.02] shrink-0" />
+                    )}
+                  </button>
+
+                  <div className="border-t border-brand-border/10 my-1.5" />
+
+                  <div className="space-y-0.5">
+                    {walletsList.map((ph) => {
+                      const isSelected = selectedWallets.includes(ph);
+                      return (
+                        <button
+                          key={ph}
+                          type="button"
+                          dir="rtl"
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedWallets(selectedWallets.filter((w) => w !== ph));
+                            } else {
+                              setSelectedWallets([...selectedWallets, ph]);
+                            }
+                          }}
+                          className="flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer text-white/80 transition-colors w-full"
+                        >
+                          <span className="text-xs font-mono text-right">{ph}</span>
+                          {isSelected ? (
+                            <div className="w-4 h-4 rounded border border-brand-accent bg-brand-accent/20 flex items-center justify-center shrink-0">
+                              <Check size={12} className="text-brand-accent stroke-[3]" />
+                            </div>
+                          ) : (
+                            <div className="w-4 h-4 rounded border border-white/25 bg-white/[0.02] shrink-0" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Clear Filters Button */}
+          {hasActiveFilters && (
+            <button
+              onClick={handleResetFilters}
+              className="h-10 px-4 rounded-xl border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] w-full sm:w-auto shrink-0 font-cairo mr-auto"
+            >
+              <RotateCcw size={13} />
+              <span>إعادة ضبط كل الفلاتر</span>
+            </button>
+          )}
+        </div>
+
+        {/* Row 2: Date Filters Section */}
+        {activeTab === "fund-requests" ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-3 border-t border-brand-border/25">
+            {/* Filter 1: Action Timestamp in System (توقيت الإجراء) */}
+            <div className="bg-[#070914]/90 border border-brand-border/60 hover:border-cyan-500/30 rounded-xl p-3.5 space-y-3 transition-colors">
+              <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+                    <Clock size={13} />
+                  </div>
+                  <span className="text-xs font-bold text-white font-cairo">توقيت الإجراء (تاريخ التنفيذ في السيستم)</span>
+                </div>
+                <span className="text-[10px] font-semibold text-cyan-400/80 bg-cyan-500/10 px-2 py-0.5 rounded-md font-cairo">
+                  عمود: توقيت الإجراء
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="space-y-1 flex-1 min-w-[125px]">
+                  <label className="text-[10px] font-bold text-brand-dim/60 block pr-1 font-cairo">من</label>
+                  <input
+                    type="date"
+                    value={actionStartDate}
+                    onChange={(e) => setActionStartDate(e.target.value)}
+                    onClick={(e) => e.currentTarget.showPicker?.()}
+                    className="w-full h-9 px-2.5 rounded-lg bg-[#0c0f1d] border border-brand-border/60 text-white font-inter text-xs focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/20 transition-all cursor-pointer"
+                  />
+                </div>
+                <div className="space-y-1 flex-1 min-w-[125px]">
+                  <label className="text-[10px] font-bold text-brand-dim/60 block pr-1 font-cairo">إلى</label>
+                  <input
+                    type="date"
+                    value={actionEndDate}
+                    onChange={(e) => setActionEndDate(e.target.value)}
+                    onClick={(e) => e.currentTarget.showPicker?.()}
+                    className="w-full h-9 px-2.5 rounded-lg bg-[#0c0f1d] border border-brand-border/60 text-white font-inter text-xs focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/20 transition-all cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* Quick presets for Action date */}
+              <div className="flex items-center gap-1.5 pt-1">
+                <span className="text-[10px] text-brand-dim/60 pl-1 font-cairo">سريع:</span>
+                <button
+                  type="button"
+                  onClick={() => handleSetQuickDate("action", "today")}
+                  className={`px-2.5 py-1 rounded-md text-[10.5px] font-bold transition-all cursor-pointer border ${
+                    actionStartDate === todayStr && actionEndDate === todayStr
+                      ? "bg-cyan-500/20 border-cyan-400 text-cyan-300"
+                      : "bg-[#0c0f1d] border-brand-border/40 text-brand-dim hover:text-white hover:border-brand-border"
+                  }`}
+                >
+                  اليوم
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetQuickDate("action", "yesterday")}
+                  className={`px-2.5 py-1 rounded-md text-[10.5px] font-bold transition-all cursor-pointer border ${
+                    actionStartDate === yesterdayStr && actionEndDate === yesterdayStr
+                      ? "bg-cyan-500/20 border-cyan-400 text-cyan-300"
+                      : "bg-[#0c0f1d] border-brand-border/40 text-brand-dim hover:text-white hover:border-brand-border"
+                  }`}
+                >
+                  أمس
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetQuickDate("action", "thisMonth")}
+                  className={`px-2.5 py-1 rounded-md text-[10.5px] font-bold transition-all cursor-pointer border ${
+                    actionStartDate === startOfMonthStr && actionEndDate === todayStr
+                      ? "bg-cyan-500/20 border-cyan-400 text-cyan-300"
+                      : "bg-[#0c0f1d] border-brand-border/40 text-brand-dim hover:text-white hover:border-brand-border"
+                  }`}
+                >
+                  هذا الشهر
+                </button>
+                {(actionStartDate || actionEndDate) && (
+                  <button
+                    type="button"
+                    onClick={() => handleSetQuickDate("action", "clear")}
+                    className="px-2 py-1 rounded-md text-[10px] text-red-400 hover:text-red-300 transition-colors mr-auto font-cairo cursor-pointer"
+                  >
+                    مسح
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Filter 2: Manual Transaction Date (التاريخ المدخل يدوي) */}
+            <div className="bg-[#070914]/90 border border-brand-border/60 hover:border-brand-accent/30 rounded-xl p-3.5 space-y-3 transition-colors">
+              <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-brand-accent/15 border border-brand-accent/30 flex items-center justify-center text-brand-accent shrink-0">
+                    <Calendar size={13} />
+                  </div>
+                  <span className="text-xs font-bold text-white font-cairo">التاريخ (المدخل يدوي عند قبول الطلب)</span>
+                </div>
+                <span className="text-[10px] font-semibold text-brand-accent/90 bg-brand-accent/10 px-2 py-0.5 rounded-md font-cairo">
+                  عمود: التاريخ
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="space-y-1 flex-1 min-w-[125px]">
+                  <label className="text-[10px] font-bold text-brand-dim/60 block pr-1 font-cairo">من</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    onClick={(e) => e.currentTarget.showPicker?.()}
+                    className="w-full h-9 px-2.5 rounded-lg bg-[#0c0f1d] border border-brand-border/60 text-white font-inter text-xs focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/20 transition-all cursor-pointer"
+                  />
+                </div>
+                <div className="space-y-1 flex-1 min-w-[125px]">
+                  <label className="text-[10px] font-bold text-brand-dim/60 block pr-1 font-cairo">إلى</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    onClick={(e) => e.currentTarget.showPicker?.()}
+                    className="w-full h-9 px-2.5 rounded-lg bg-[#0c0f1d] border border-brand-border/60 text-white font-inter text-xs focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/20 transition-all cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {/* Quick presets for Manual date */}
+              <div className="flex items-center gap-1.5 pt-1">
+                <span className="text-[10px] text-brand-dim/60 pl-1 font-cairo">سريع:</span>
+                <button
+                  type="button"
+                  onClick={() => handleSetQuickDate("manual", "today")}
+                  className={`px-2.5 py-1 rounded-md text-[10.5px] font-bold transition-all cursor-pointer border ${
+                    startDate === todayStr && endDate === todayStr
+                      ? "bg-brand-accent/20 border-brand-accent text-brand-accent"
+                      : "bg-[#0c0f1d] border-brand-border/40 text-brand-dim hover:text-white hover:border-brand-border"
+                  }`}
+                >
+                  اليوم
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetQuickDate("manual", "yesterday")}
+                  className={`px-2.5 py-1 rounded-md text-[10.5px] font-bold transition-all cursor-pointer border ${
+                    startDate === yesterdayStr && endDate === yesterdayStr
+                      ? "bg-brand-accent/20 border-brand-accent text-brand-accent"
+                      : "bg-[#0c0f1d] border-brand-border/40 text-brand-dim hover:text-white hover:border-brand-border"
+                  }`}
+                >
+                  أمس
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetQuickDate("manual", "thisMonth")}
+                  className={`px-2.5 py-1 rounded-md text-[10.5px] font-bold transition-all cursor-pointer border ${
+                    startDate === startOfMonthStr && endDate === todayStr
+                      ? "bg-brand-accent/20 border-brand-accent text-brand-accent"
+                      : "bg-[#0c0f1d] border-brand-border/40 text-brand-dim hover:text-white hover:border-brand-border"
+                  }`}
+                >
+                  هذا الشهر
+                </button>
+                {(startDate || endDate) && (
+                  <button
+                    type="button"
+                    onClick={() => handleSetQuickDate("manual", "clear")}
+                    className="px-2 py-1 rounded-md text-[10px] text-red-400 hover:text-red-300 transition-colors mr-auto font-cairo cursor-pointer"
+                  >
+                    مسح
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Other Tabs: Daily Expenses, Edit Requests, Custody Transfers */
+          <div className="pt-3 border-t border-brand-border/25 flex flex-wrap items-end gap-4">
+            <div className="space-y-1 w-full sm:w-[160px]">
+              <label className="text-[10px] font-bold text-brand-dim/60 block pr-1 font-cairo">تاريخ البدء (من)</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                onClick={(e) => e.currentTarget.showPicker?.()}
+                className="w-full h-10 px-3 rounded-xl bg-[#070912] border border-brand-border/60 text-white font-inter text-xs focus:outline-none focus:border-brand-accent transition-all cursor-pointer"
+              />
+            </div>
+            <div className="space-y-1 w-full sm:w-[160px]">
+              <label className="text-[10px] font-bold text-brand-dim/60 block pr-1 font-cairo">تاريخ الانتهاء (إلى)</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                onClick={(e) => e.currentTarget.showPicker?.()}
+                className="w-full h-10 px-3 rounded-xl bg-[#070912] border border-brand-border/60 text-white font-inter text-xs focus:outline-none focus:border-brand-accent transition-all cursor-pointer"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-brand-dim/60 block pr-1 font-cairo">فترات سريعة</label>
+              <div className="flex items-center gap-1.5 h-10">
+                <button
+                  type="button"
+                  onClick={() => handleSetQuickDate("manual", "today")}
+                  className={`px-3 py-2 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
+                    startDate === todayStr && endDate === todayStr
+                      ? "bg-brand-accent/20 border-brand-accent text-brand-accent"
+                      : "border-brand-border/50 bg-[#070912] hover:bg-brand-accent/15 text-white/80"
+                  }`}
+                >
+                  اليوم
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetQuickDate("manual", "yesterday")}
+                  className="px-3 py-2 rounded-lg border border-brand-border/50 bg-[#070912] hover:bg-brand-accent/15 text-white/80 text-xs font-bold transition-all cursor-pointer"
+                >
+                  أمس
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetQuickDate("manual", "thisMonth")}
+                  className="px-3 py-2 rounded-lg border border-brand-border/50 bg-[#070912] hover:bg-brand-accent/15 text-white/80 text-xs font-bold transition-all cursor-pointer"
+                >
+                  هذا الشهر
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Tabs Controller - Only show all tabs if NOT accountant */}
+      {userRole !== "accountant" && (
+        <div className="flex items-center gap-2 border-b border-brand-border/40 pb-px overflow-x-auto scrollbar-none">
           <button
-            onClick={handleResetFilters}
-            className="h-10 px-5 rounded-xl border border-red-500/20 bg-red-500/5 text-red-400 hover:bg-red-500/10 hover:text-red-300 font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.98] w-full sm:w-auto shrink-0 font-cairo"
+            onClick={() => {
+              setActiveTab("fund-requests");
+              setSelectedStatus("all");
+            }}
+            className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all duration-300 cursor-pointer shrink-0 ${
+              activeTab === "fund-requests"
+                ? "border-brand-accent text-white"
+                : "border-transparent text-white/50 hover:text-white/80"
+            }`}
           >
-            <RotateCcw size={13} />
-            <span>مسح الفلاتر</span>
+            <Coins size={16} />
+            <span>طلبات الأموال للجميع</span>
           </button>
-        )}
-      </div>
-
-      {/* Tabs Controller */}
-      <div className="flex items-center gap-2 border-b border-brand-border/40 pb-px overflow-x-auto scrollbar-none">
-        <button
-          onClick={() => {
-            setActiveTab("fund-requests");
-            setSelectedStatus("all");
-          }}
-          className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all duration-300 cursor-pointer shrink-0 ${
-            activeTab === "fund-requests"
-              ? "border-brand-accent text-white"
-              : "border-transparent text-white/50 hover:text-white/80"
-          }`}
-        >
-          <Coins size={16} />
-          <span>طلبات الأموال للجميع</span>
-        </button>
-        <button
-          onClick={() => {
-            setActiveTab("daily-expenses");
-            setSelectedStatus("all");
-          }}
-          className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all duration-300 cursor-pointer shrink-0 ${
-            activeTab === "daily-expenses"
-              ? "border-brand-accent text-white"
-              : "border-transparent text-white/50 hover:text-white/80"
-          }`}
-        >
-          <ClipboardList size={16} />
-          <span>المصاريف والتحويلات للجميع</span>
-        </button>
-        <button
-          onClick={() => {
-            setActiveTab("edit-requests");
-            setSelectedStatus("all");
-          }}
-          className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all duration-300 cursor-pointer shrink-0 ${
-            activeTab === "edit-requests"
-              ? "border-brand-accent text-white"
-              : "border-transparent text-white/50 hover:text-white/80"
-          }`}
-        >
-          <FileEdit size={16} />
-          <span>طلبات التعديل للجميع</span>
-        </button>
-        <button
-          onClick={() => {
-            setActiveTab("custody-transfers");
-            setSelectedStatus("all");
-          }}
-          className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all duration-300 cursor-pointer shrink-0 ${
-            activeTab === "custody-transfers"
-              ? "border-brand-accent text-white"
-              : "border-transparent text-white/50 hover:text-white/80"
-          }`}
-        >
-          <ArrowRightLeft size={16} />
-          <span>تحويلات العهدة بين الزملاء</span>
-        </button>
-      </div>
+          <button
+            onClick={() => {
+              setActiveTab("daily-expenses");
+              setSelectedStatus("all");
+            }}
+            className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all duration-300 cursor-pointer shrink-0 ${
+              activeTab === "daily-expenses"
+                ? "border-brand-accent text-white"
+                : "border-transparent text-white/50 hover:text-white/80"
+            }`}
+          >
+            <ClipboardList size={16} />
+            <span>المصاريف والتحويلات للجميع</span>
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab("edit-requests");
+              setSelectedStatus("all");
+            }}
+            className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all duration-300 cursor-pointer shrink-0 ${
+              activeTab === "edit-requests"
+                ? "border-brand-accent text-white"
+                : "border-transparent text-white/50 hover:text-white/80"
+            }`}
+          >
+            <FileEdit size={16} />
+            <span>طلبات التعديل للجميع</span>
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab("custody-transfers");
+              setSelectedStatus("all");
+            }}
+            className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all duration-300 cursor-pointer shrink-0 ${
+              activeTab === "custody-transfers"
+                ? "border-brand-accent text-white"
+                : "border-transparent text-white/50 hover:text-white/80"
+            }`}
+          >
+            <ArrowRightLeft size={16} />
+            <span>تحويلات العهدة بين الزملاء</span>
+          </button>
+        </div>
+      )}
 
       {/* Tab Panels */}
       <div className="bg-[#0a0d16]/60 border border-brand-border/40 backdrop-blur-xl rounded-3xl p-6 shadow-xl animate-fade-in min-h-[350px] relative">
@@ -818,8 +1173,146 @@ export default function HistoryClient({
 
         {/* TAB 1: Fund Requests */}
         {activeTab === "fund-requests" && (
-          <div className="space-y-4">
-            <h3 className="text-base font-bold text-white mb-2">تاريخ طلبات شحن الرصيد والعهدة للجميع</h3>
+          <div className="space-y-5">
+            {/* Header Title & Summary Card */}
+            <div className="space-y-4">
+              <h3 className="text-base font-bold text-white">تاريخ طلبات شحن الرصيد والعهدة للجميع</h3>
+
+              {/* Transferred Funds Summary Card */}
+              {(() => {
+                const isActionDateActive = Boolean(actionStartDate || actionEndDate);
+                const isManualDateActive = Boolean(startDate || endDate);
+
+                let summaryTitle = "إجمالي المبالغ المحولة المعتمدة للجميع";
+                let summarySubtitle = "عرض عام لكافة التحويلات المعتمدة (بدون تحديد تاريخ)";
+
+                if (selectedStatus && selectedStatus !== "all" && selectedStatus !== "approved") {
+                  summaryTitle = "إجمالي المبالغ المحولة المعتمدة";
+                  summarySubtitle = "تم اختيار حالة طلبات غير معتمدة (المبالغ المحولة = 0 ج.م)";
+                } else if (isActionDateActive && !isManualDateActive) {
+                  if (actionStartDate && actionEndDate && actionStartDate === actionEndDate) {
+                    summaryTitle = `إجمالي التحويلات المنفذة بتاريخ إجرائي (${actionStartDate})`;
+                  } else if (actionStartDate && actionEndDate) {
+                    summaryTitle = `إجمالي التحويلات المنفذة بين (${actionStartDate}) و (${actionEndDate})`;
+                  } else if (actionStartDate) {
+                    summaryTitle = `إجمالي التحويلات المنفذة منذ (${actionStartDate})`;
+                  } else {
+                    summaryTitle = `إجمالي التحويلات المنفذة حتى (${actionEndDate})`;
+                  }
+                  summarySubtitle = "محسوبة بناءً على توقيت الإجراء الفعلي في السيستم (عمود توقيت الإجراء)";
+                } else if (isManualDateActive && !isActionDateActive) {
+                  if (startDate && endDate && startDate === endDate) {
+                    summaryTitle = `إجمالي التحويلات لتاريخ معاملة (${startDate})`;
+                  } else if (startDate && endDate) {
+                    summaryTitle = `إجمالي التحويلات لتاريخ معاملة بين (${startDate}) و (${endDate})`;
+                  } else if (startDate) {
+                    summaryTitle = `إجمالي التحويلات لتاريخ معاملة منذ (${startDate})`;
+                  } else {
+                    summaryTitle = `إجمالي التحويلات لتاريخ معاملة حتى (${endDate})`;
+                  }
+                  summarySubtitle = "محسوبة بناءً على التاريخ المدخل يدوي عند قبول الطلب (عمود التاريخ)";
+                } else if (isActionDateActive && isManualDateActive) {
+                  summaryTitle = "إجمالي التحويلات المطابقة للفلاتر المزدوجة";
+                  summarySubtitle = "مفلترة حسب توقيت الإجراء وتاريخ المعاملة المدخل يدوي معاً";
+                }
+
+                return (
+                  <div className="bg-gradient-to-r from-[#0c1024]/90 via-[#0e1630]/90 to-[#0c1024]/90 border border-brand-border/60 rounded-2xl p-5 shadow-xl space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-brand-border/20 pb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-xl bg-brand-accent/15 border border-brand-accent/30 flex items-center justify-center text-brand-accent shrink-0 shadow-[0_0_15px_rgba(139,92,246,0.2)]">
+                          <Coins size={22} />
+                        </div>
+                        <div>
+                          <h4 className="text-sm md:text-base font-bold text-white">
+                            {summaryTitle}
+                          </h4>
+                          <span className="text-[11px] text-brand-dim">
+                            {summarySubtitle}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-6">
+                        <div className="text-right">
+                          <span className="text-[11px] text-brand-dim block font-medium">إجمالي المبالغ المحولة:</span>
+                          <span className="text-2xl md:text-3xl font-black text-brand-accent font-inter tracking-tight">
+                            {(fundSummary?.totalTransferred || 0).toLocaleString("en-US")}{" "}
+                            <span className="text-xs text-brand-dim font-normal font-cairo">ج.م</span>
+                          </span>
+                        </div>
+                        <div className="h-9 w-px bg-brand-border/40 hidden sm:block" />
+                        <div className="text-right hidden sm:block">
+                          <span className="text-[11px] text-brand-dim block font-medium">عدد التحويلات:</span>
+                          <span className="text-lg font-bold text-white font-inter">
+                            {fundSummary?.approvedCount || 0}{" "}
+                            <span className="text-[11px] text-brand-dim font-cairo">عملية</span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Recipients Breakdown: "وبعت لمين ولمين ولمين وبعتلهم قد ايه" */}
+                    {fundSummary?.recipients && fundSummary.recipients.length > 0 ? (
+                      <div className="space-y-2.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-brand-dim/80">
+                            المستلمون في هذه الفترة ({fundSummary.recipients.length} موظف):
+                          </span>
+                          <span className="text-[11px] text-brand-dim/60">
+                            (اضغط على اسم الموظف لتصفيته حصراً)
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2.5 max-h-48 overflow-y-auto custom-scrollbar pt-0.5">
+                          {fundSummary.recipients.map((rec: any) => {
+                            const isSelected = selectedAgentIds.length === 1 && selectedAgentIds[0] === rec.agentId;
+                            return (
+                              <button
+                                key={rec.agentId}
+                                type="button"
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setSelectedAgentIds([]);
+                                  } else {
+                                    setSelectedAgentIds([rec.agentId]);
+                                  }
+                                }}
+                                className={`rounded-xl px-3.5 py-2.5 flex items-center gap-2.5 transition-all text-xs cursor-pointer border text-right ${
+                                  isSelected
+                                    ? "bg-brand-accent/20 border-brand-accent text-white shadow-[0_0_12px_rgba(139,92,246,0.25)]"
+                                    : "bg-[#070914]/80 border-brand-border/50 hover:border-brand-accent/40 text-white/90 hover:bg-[#070914]"
+                                }`}
+                              >
+                                <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
+                                  isSelected ? "bg-brand-accent text-white" : "bg-white/5 border border-white/10 text-brand-accent"
+                                }`}>
+                                  <User size={12} />
+                                </div>
+                                <div>
+                                  <span className="font-bold block text-xs">{rec.agentName}</span>
+                                  <div className="flex items-center gap-1.5 text-[10px] mt-0.5">
+                                    <span className="font-bold text-emerald-400 font-inter">
+                                      {rec.totalAmount.toLocaleString("en-US")} ج.م
+                                    </span>
+                                    {rec.count > 1 && (
+                                      <span className="text-brand-dim font-inter">({rec.count} عمليات)</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-brand-dim/60 py-1">
+                        لا توجد مبالغ محولة معتمدة مسجلة في هذا النطاق الزمني.
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
             
             {fundRequests.length === 0 ? (
               renderEmptyState("لم يتم العثور على أي طلبات أموال مطابقة للفلاتر.", Coins)
@@ -925,8 +1418,8 @@ export default function HistoryClient({
           </div>
         )}
 
-        {/* TAB 2: Daily Expenses */}
-        {activeTab === "daily-expenses" && (
+        {/* TAB 2: Daily Expenses (Hidden for Accountant) */}
+        {userRole !== "accountant" && activeTab === "daily-expenses" && (
           <div className="space-y-4">
             <h3 className="text-base font-bold text-white mb-2">سجل المصاريف والتحويلات للجميع</h3>
             
@@ -1013,8 +1506,8 @@ export default function HistoryClient({
           </div>
         )}
 
-        {/* TAB 3: Edit Requests */}
-        {activeTab === "edit-requests" && (
+        {/* TAB 3: Edit Requests (Hidden for Accountant) */}
+        {userRole !== "accountant" && activeTab === "edit-requests" && (
           <div className="space-y-4">
             <h3 className="text-base font-bold text-white mb-2">طلبات تعديل المصاريف للجميع</h3>
             
@@ -1109,8 +1602,8 @@ export default function HistoryClient({
           </div>
         )}
 
-        {/* 4. Custody Transfers Tab Content */}
-        {activeTab === "custody-transfers" && (
+        {/* 4. Custody Transfers Tab Content (Hidden for Accountant) */}
+        {userRole !== "accountant" && activeTab === "custody-transfers" && (
           <div className="space-y-4 animate-fade-in">
             {custodyTransfers.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

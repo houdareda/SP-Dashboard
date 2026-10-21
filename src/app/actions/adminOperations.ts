@@ -328,7 +328,8 @@ export async function reviewFundRequest(
   requestId: string,
   status: "approved" | "rejected",
   approvedAmount?: number,
-  multiApprovedBreakdown?: Array<{ walletId: string; amountApproved: number }>
+  multiApprovedBreakdown?: Array<{ walletId: string; amountApproved: number }>,
+  approvalDate?: string
 ) {
   try {
     const user = await getCurrentUser();
@@ -367,11 +368,17 @@ export async function reviewFundRequest(
     }
 
     // 3. Prepare update data payload
+    const nowIso = new Date().toISOString();
     const updateData: any = {
       status,
       approved_by: user.id,
-      approved_at: new Date().toISOString(),
+      approved_at: nowIso, // System timestamp for "توقيت الإجراء"
     };
+
+    // If the accountant entered a custom transaction date, save it in request_date for "التاريخ"
+    if (approvalDate && status === "approved") {
+      updateData.request_date = approvalDate;
+    }
 
     if (status === "approved") {
       if (request.is_multi_wallet && Array.isArray(request.multi_wallet_data)) {
@@ -534,6 +541,7 @@ export async function reviewFundRequest(
     await createNotification(request.agent_id, title, message);
 
     revalidatePath("/dashboard/admin/fund-requests");
+    revalidatePath("/dashboard/management/history");
     revalidatePath("/dashboard/operations");
     revalidatePath("/dashboard/logs");
 
@@ -919,6 +927,40 @@ export async function getManagementHistory() {
   }
 }
 
+// Helper to convert Cairo local date bounds into UTC ISO strings for approved_at
+function getCairoUtcRange(startDate?: string, endDate?: string) {
+  let startUtc: string | undefined = undefined;
+  let endUtc: string | undefined = undefined;
+
+  function getOffset(dateStr: string) {
+    try {
+      const tempDate = new Date(`${dateStr}T12:00:00Z`);
+      const tzString = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Africa/Cairo",
+        timeZoneName: "shortOffset",
+      }).format(tempDate);
+      const match = tzString.match(/GMT([+-]\d+)/);
+      const offsetHours = match ? parseInt(match[1], 10) : 2;
+      const sign = offsetHours >= 0 ? "+" : "-";
+      const pad = String(Math.abs(offsetHours)).padStart(2, "0");
+      return `${sign}${pad}:00`;
+    } catch {
+      return "+02:00";
+    }
+  }
+
+  if (startDate) {
+    const tz = getOffset(startDate);
+    startUtc = new Date(`${startDate}T00:00:00.000${tz}`).toISOString();
+  }
+  if (endDate) {
+    const tz = getOffset(endDate);
+    endUtc = new Date(`${endDate}T23:59:59.999${tz}`).toISOString();
+  }
+
+  return { startUtc, endUtc };
+}
+
 /**
  * Action: Get fund requests for management with filters and pagination
  */
@@ -927,6 +969,8 @@ export async function getAdminFundRequestsPaginated(params: {
   limit: number;
   startDate?: string;
   endDate?: string;
+  actionStartDate?: string;
+  actionEndDate?: string;
   status?: string;
   agentIds?: string[];
   walletPhoneNumbers?: string[];
@@ -954,12 +998,21 @@ export async function getAdminFundRequestsPaginated(params: {
         reviewer:profiles!fund_requests_approved_by_fkey(full_name)
       `, { count: "exact" });
 
+    // 1. Filter by manual transaction date ("التاريخ" - request_date)
     if (params.startDate) {
       query = query.gte("request_date", params.startDate);
     }
     if (params.endDate) {
       query = query.lte("request_date", params.endDate);
     }
+
+    // 2. Filter by action timestamp ("توقيت الإجراء" - approved_at)
+    if (params.actionStartDate || params.actionEndDate) {
+      const { startUtc, endUtc } = getCairoUtcRange(params.actionStartDate, params.actionEndDate);
+      if (startUtc) query = query.gte("approved_at", startUtc);
+      if (endUtc) query = query.lte("approved_at", endUtc);
+    }
+
     if (params.status && params.status !== "all") {
       query = query.eq("status", params.status);
     }
@@ -967,8 +1020,10 @@ export async function getAdminFundRequestsPaginated(params: {
       query = query.in("agent_id", params.agentIds);
     }
 
+    const orderCol = (params.actionStartDate || params.actionEndDate) ? "approved_at" : "created_at";
+
     const { data, count, error } = await query
-      .order("created_at", { ascending: false })
+      .order(orderCol, { ascending: false, nullsFirst: false })
       .range((params.page - 1) * params.limit, params.page * params.limit - 1);
 
     if (error) throw error;
@@ -980,10 +1035,86 @@ export async function getAdminFundRequestsPaginated(params: {
       );
     }
 
-    return { success: true, data: filteredData, totalCount: count || 0 };
+    // If filtered status is explicitly non-approved, return 0 for approved transfers summary
+    if (params.status && params.status !== "all" && params.status !== "approved") {
+      return {
+        success: true,
+        data: filteredData,
+        totalCount: count || 0,
+        summary: { totalTransferred: 0, approvedCount: 0, recipients: [] },
+      };
+    }
+
+    // Calculate aggregate summary for approved requests matching the same filters:
+    let summaryQuery = supabaseAdmin
+      .from("fund_requests")
+      .select(`
+        amount_approved,
+        agent_id,
+        agent:profiles!fund_requests_agent_id_fkey(full_name)
+      `)
+      .eq("status", "approved");
+
+    if (params.startDate) {
+      summaryQuery = summaryQuery.gte("request_date", params.startDate);
+    }
+    if (params.endDate) {
+      summaryQuery = summaryQuery.lte("request_date", params.endDate);
+    }
+    if (params.actionStartDate || params.actionEndDate) {
+      const { startUtc, endUtc } = getCairoUtcRange(params.actionStartDate, params.actionEndDate);
+      if (startUtc) summaryQuery = summaryQuery.gte("approved_at", startUtc);
+      if (endUtc) summaryQuery = summaryQuery.lte("approved_at", endUtc);
+    }
+    if (params.agentIds && params.agentIds.length > 0) {
+      summaryQuery = summaryQuery.in("agent_id", params.agentIds);
+    }
+
+    const { data: summaryRows } = await summaryQuery;
+
+    let totalTransferred = 0;
+    const recipientsMap = new Map<string, { agentId: string; agentName: string; totalAmount: number; count: number }>();
+
+    (summaryRows || []).forEach((item: any) => {
+      const amt = Number(item.amount_approved) || 0;
+      totalTransferred += amt;
+      const agentId = item.agent_id;
+      const agentName = item.agent?.full_name || "موظف";
+      const existing = recipientsMap.get(agentId);
+      if (existing) {
+        existing.totalAmount += amt;
+        existing.count += 1;
+      } else {
+        recipientsMap.set(agentId, {
+          agentId,
+          agentName,
+          totalAmount: amt,
+          count: 1,
+        });
+      }
+    });
+
+    const recipients = Array.from(recipientsMap.values()).sort((a, b) => b.totalAmount - a.totalAmount);
+
+    return {
+      success: true,
+      data: filteredData,
+      totalCount: count || 0,
+      summary: {
+        totalTransferred,
+        approvedCount: summaryRows?.length || 0,
+        recipients,
+      },
+    };
   } catch (err: any) {
     console.error("getAdminFundRequestsPaginated error:", err);
-    return { success: false, error: err.message, data: [], totalCount: 0 };
+    return {
+      success: false,
+      error: err.message,
+      data: [],
+      totalCount: 0,
+      summary: { totalTransferred: 0, approvedCount: 0, recipients: [] },
+    };
   }
 }
 

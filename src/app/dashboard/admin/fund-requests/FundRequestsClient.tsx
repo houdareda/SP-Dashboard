@@ -57,8 +57,19 @@ export default function FundRequestsClient({
   const [expandedRequests, setExpandedRequests] = useState<Record<string, boolean>>({});
 
   // Modals state
+  const getTodayCairo = () => {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Africa/Cairo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date()).split("-");
+    return `${parts[0]}-${parts[1]}-${parts[2]}`;
+  };
+
   const [activeModalRequest, setActiveModalRequest] = useState<AdminFundRequest | null>(null);
   const [approvedAmount, setApprovedAmount] = useState<string>("");
+  const [approvalDate, setApprovalDate] = useState<string>(getTodayCairo());
   const [multiApprovedAmounts, setMultiApprovedAmounts] = useState<Record<string, string>>({});
   const [activeRejectRequest, setActiveRejectRequest] = useState<AdminFundRequest | null>(null);
 
@@ -191,6 +202,7 @@ export default function FundRequestsClient({
   // 2. Action Handlers
   const handleOpenApproveModal = (req: AdminFundRequest) => {
     setActiveModalRequest(req);
+    setApprovalDate(getTodayCairo());
     if (req.is_multi_wallet) {
       setApprovedAmount(String(req.amount_requested));
       const initialAmounts: Record<string, string> = {};
@@ -240,7 +252,7 @@ export default function FundRequestsClient({
       }
 
       startTransition(async () => {
-        const res = await reviewFundRequest(activeModalRequest.id, "approved", totalApproved, breakdown);
+        const res = await reviewFundRequest(activeModalRequest.id, "approved", totalApproved, breakdown, approvalDate);
         if (res.success) {
           showToast("تم اعتماد طلب شحن الرصيد بنجاح.", "success");
           setRequests((prev) => prev.filter((r) => r.id !== activeModalRequest.id));
@@ -258,7 +270,7 @@ export default function FundRequestsClient({
       }
 
       startTransition(async () => {
-        const res = await reviewFundRequest(activeModalRequest.id, "approved", amountVal);
+        const res = await reviewFundRequest(activeModalRequest.id, "approved", amountVal, undefined, approvalDate);
         if (res.success) {
           showToast("تم اعتماد طلب شحن الرصيد بنجاح.", "success");
           setRequests((prev) => prev.filter((r) => r.id !== activeModalRequest.id));
@@ -929,6 +941,29 @@ export default function FundRequestsClient({
                   </div>
                 </div>
               )}
+
+              {/* Approval / Transfer Date Picker */}
+              <div className="space-y-2 text-right">
+                <label className="block text-[13px] font-medium text-brand-dim font-cairo">
+                  تاريخ التحويل / الاعتماد
+                </label>
+                <div className="relative">
+                  <input
+                    type="date"
+                    disabled={isPending}
+                    value={approvalDate}
+                    onChange={(e) => setApprovalDate(e.target.value)}
+                    onClick={(e) => e.currentTarget.showPicker?.()}
+                    className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3 text-sm text-white focus:outline-none focus:border-brand-accent transition-all text-left dir-ltr font-inter cursor-pointer"
+                  />
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none">
+                    <Calendar size={16} />
+                  </span>
+                </div>
+                <p className="text-[10px] text-brand-dim/70 font-cairo">
+                  * تم ضبطه تلقائياً على تاريخ اليوم، ويمكنك تعديله في حال تم التحويل في يوم آخر لحفظه بدقة.
+                </p>
+              </div>
 
               {/* Approved Amount Display / Input */}
               {activeModalRequest.is_multi_wallet ? (
