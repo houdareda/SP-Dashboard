@@ -37,6 +37,12 @@ export interface AdminAgentOption {
   full_name: string;
 }
 
+import {
+  FundRequestEditRecord,
+  extractFundRequestEditHistory,
+  extractFundRequestWallets,
+} from "@/lib/fundUtils";
+
 export interface EditExpenseRequestData {
   id: string;
   expense_id: string;
@@ -376,7 +382,10 @@ export async function reviewFundRequest(
     };
 
     // If the accountant entered a custom transaction date, save it in request_date for "التاريخ"
-    if (approvalDate && status === "approved") {
+    if (status === "approved") {
+      if (!approvalDate) {
+        return { success: false, error: "يرجى تحديد تاريخ التحويل / الاعتماد." };
+      }
       updateData.request_date = approvalDate;
     }
 
@@ -549,6 +558,235 @@ export async function reviewFundRequest(
   } catch (err: any) {
     console.error("reviewFundRequest error:", err);
     return { success: false, error: err.message || "حدث خطأ غير متوقع." };
+  }
+}
+
+/**
+ * Action: Edit an approved fund request (amount, date, notes, breakdown)
+ * Only allowed for accountants and admins
+ */
+export async function editApprovedFundRequest({
+  requestId,
+  newAmount,
+  newDate,
+  notes,
+  multiBreakdown,
+}: {
+  requestId: string;
+  newAmount: number;
+  newDate?: string;
+  notes: string;
+  multiBreakdown?: Array<{ walletId: string; amountApproved: number }>;
+}) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "غير مصرح بالعملية. الرجاء تسجيل الدخول أولاً." };
+    }
+
+    // 1. Verify user profile and role (admin or accountant)
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, full_name, role")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError || !profile || (profile.role !== "admin" && profile.role !== "accountant")) {
+      return { success: false, error: "غير مصرح لك بتعديل طلبات الأموال. هذه الصلاحية للمحاسب والمدير فقط." };
+    }
+
+    if (!requestId) {
+      return { success: false, error: "معرف الطلب غير صحيح." };
+    }
+
+    if (!notes || !notes.trim()) {
+      return { success: false, error: "يرجى كتابة سبب / ملاحظات التعديل لتسجيلها في سجل العمليات." };
+    }
+
+    if (typeof newAmount !== "number" || isNaN(newAmount) || newAmount <= 0) {
+      return { success: false, error: "يرجى إدخال مبلغ صحيح أكبر من الصفر." };
+    }
+
+    // 2. Fetch original request
+    const { data: request, error: requestError } = await supabaseAdmin
+      .from("fund_requests")
+      .select("*, agent:profiles!fund_requests_agent_id_fkey(full_name)")
+      .eq("id", requestId)
+      .single();
+
+    if (requestError || !request) {
+      return { success: false, error: "لم يتم العثور على طلب شحن الرصيد." };
+    }
+
+    if (request.status !== "approved") {
+      return { success: false, error: "لا يمكن تعديل هذا الطلب لأنه ليس في حالة معتمد." };
+    }
+
+    const oldAmount = Number(request.amount_approved) || Number(request.amount_requested) || 0;
+    const oldDate = request.request_date;
+    const resolvedNewDate = newDate?.trim() || oldDate;
+    const delta = newAmount - oldAmount;
+    const nowIso = new Date().toISOString();
+
+    const existingHistory = extractFundRequestEditHistory(request.multi_wallet_data);
+
+    // Build the new edit record
+    const newRecord: FundRequestEditRecord = {
+      id: crypto.randomUUID(),
+      edited_at: nowIso,
+      edited_by: user.id,
+      editor_name: profile.full_name || (profile.role === "accountant" ? "المحاسب" : "المدير"),
+      editor_role: profile.role,
+      old_amount: oldAmount,
+      new_amount: newAmount,
+      difference: delta,
+      old_date: oldDate,
+      new_date: resolvedNewDate,
+      notes: notes.trim(),
+    };
+
+    let updatedMultiData: any;
+
+    if (request.is_multi_wallet && Array.isArray(request.multi_wallet_data)) {
+      const walletItems = request.multi_wallet_data.filter((item: any) => item && !item.__audit);
+      const oldBreakdown = walletItems.map((w: any) => ({
+        wallet_id: w.wallet_id,
+        phone_number: w.phone_number,
+        amount_approved: Number(w.amount_approved) || 0,
+      }));
+
+      if (multiBreakdown && Array.isArray(multiBreakdown)) {
+        walletItems.forEach((w: any) => {
+          const match = multiBreakdown.find((b) => b.walletId === w.wallet_id);
+          if (match) {
+            w.amount_approved = match.amountApproved;
+          }
+        });
+      }
+
+      const newBreakdown = walletItems.map((w: any) => ({
+        wallet_id: w.wallet_id,
+        phone_number: w.phone_number,
+        amount_approved: Number(w.amount_approved) || 0,
+      }));
+
+      newRecord.old_breakdown = oldBreakdown;
+      newRecord.new_breakdown = newBreakdown;
+
+      updatedMultiData = [
+        ...walletItems,
+        {
+          __audit: true,
+          edit_history: [newRecord, ...existingHistory],
+        },
+      ];
+    } else {
+      updatedMultiData = {
+        ...(typeof request.multi_wallet_data === "object" && request.multi_wallet_data !== null && !Array.isArray(request.multi_wallet_data)
+          ? request.multi_wallet_data
+          : {}),
+        edit_history: [newRecord, ...existingHistory],
+      };
+    }
+
+    // 3. Update fund_requests
+    const { error: updateError } = await supabaseAdmin
+      .from("fund_requests")
+      .update({
+        amount_approved: newAmount,
+        request_date: resolvedNewDate,
+        multi_wallet_data: updatedMultiData,
+      })
+      .eq("id", requestId);
+
+    if (updateError) {
+      console.error("Error updating fund request after edit:", updateError);
+      return { success: false, error: `فشل حفظ التعديل في قاعدة البيانات: ${updateError.message}` };
+    }
+
+    // 4. Send notification to the agent if amount or date changed
+    try {
+      const agentTitle = "تم تعديل مبلغ طلب شحن الرصيد";
+      const agentMsg = `قام المحاسب بتعديل مبلغ شحن الرصيد المعتمد ليصبح ${newAmount.toLocaleString("en-US")} ج.م (تاريخ: ${resolvedNewDate}). ملاحظات: ${notes.trim()}`;
+      await createNotification(request.agent_id, agentTitle, agentMsg);
+    } catch (notifErr) {
+      console.error("Notification error on fund request edit:", notifErr);
+    }
+
+    revalidatePath("/dashboard/management/history");
+    revalidatePath("/dashboard/admin/fund-requests");
+    revalidatePath("/dashboard/operations");
+    revalidatePath("/dashboard/logs");
+    revalidatePath("/dashboard");
+
+    return { success: true, record: newRecord };
+  } catch (err: any) {
+    console.error("editApprovedFundRequest error:", err);
+    return { success: false, error: err.message || "حدث خطأ غير متوقع." };
+  }
+}
+
+/**
+ * Action: Get all fund requests that have been edited (for dedicated tab / audit view)
+ */
+export async function getAdminEditedFundRequests(): Promise<{
+  success: boolean;
+  error?: string;
+  data: any[];
+}> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "غير مصرح بالعملية", data: [] };
+    }
+
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (!profile || (profile.role !== "admin" && profile.role !== "accountant")) {
+      return { success: false, error: "غير مصرح بالعملية", data: [] };
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("fund_requests")
+      .select(`
+        *,
+        agent:profiles!fund_requests_agent_id_fkey(id, full_name),
+        wallet:wallets(phone_number),
+        reviewer:profiles!fund_requests_approved_by_fkey(full_name)
+      `)
+      .eq("status", "approved")
+      .not("multi_wallet_data", "is", null)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    // Filter to those that actually have edit_history entries
+    const editedRequests = (data || [])
+      .map((req: any) => {
+        const history = extractFundRequestEditHistory(req.multi_wallet_data);
+        return {
+          ...req,
+          editHistory: history,
+        };
+      })
+      .filter((req: any) => req.editHistory.length > 0)
+      .sort((a: any, b: any) => {
+        const timeA = new Date(a.editHistory[0]?.edited_at || a.created_at).getTime();
+        const timeB = new Date(b.editHistory[0]?.edited_at || b.created_at).getTime();
+        return timeB - timeA;
+      });
+
+    return {
+      success: true,
+      data: editedRequests,
+    };
+  } catch (err: any) {
+    console.error("getAdminEditedFundRequests error:", err);
+    return { success: false, error: err.message, data: [] };
   }
 }
 
@@ -1115,6 +1353,112 @@ export async function getAdminFundRequestsPaginated(params: {
       totalCount: 0,
       summary: { totalTransferred: 0, approvedCount: 0, recipients: [] },
     };
+  }
+}
+
+export interface FundDayStat {
+  date: string;
+  dayLabel: "today" | "yesterday" | "dayBefore";
+  dayName: string;
+  formattedDate: string;
+  totalTransferred: number;
+  totalOperations: number;
+  approvedCount: number;
+  pendingCount: number;
+  rejectedCount: number;
+}
+
+/**
+ * Action: Get high-level stats for the rolling last 3 days for fund requests
+ */
+export async function getFundRequestsLast3DaysStats(): Promise<{
+  success: boolean;
+  error?: string;
+  stats: FundDayStat[];
+}> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "غير مصرح بالعملية", stats: [] };
+
+    // Function to calculate Egypt date string YYYY-MM-DD for N days ago
+    const getEgyptDateStr = (daysAgo: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() - daysAgo);
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Africa/Cairo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(d).split("-");
+      return `${parts[0]}-${parts[1]}-${parts[2]}`;
+    };
+
+    const days: Array<{ date: string; label: "today" | "yesterday" | "dayBefore" }> = [
+      { date: getEgyptDateStr(0), label: "today" },
+      { date: getEgyptDateStr(1), label: "yesterday" },
+      { date: getEgyptDateStr(2), label: "dayBefore" },
+    ];
+
+    const dateList = days.map((d) => d.date);
+
+    const { data, error } = await supabaseAdmin
+      .from("fund_requests")
+      .select("id, request_date, status, amount_approved")
+      .in("request_date", dateList);
+
+    if (error) {
+      console.error("getFundRequestsLast3DaysStats query error:", error);
+      return { success: false, error: error.message, stats: [] };
+    }
+
+    const formatArabicDate = (dateStr: string) => {
+      try {
+        const d = new Date(`${dateStr}T12:00:00+03:00`);
+        const dayName = new Intl.DateTimeFormat("ar-EG-u-nu-latn", {
+          timeZone: "Africa/Cairo",
+          weekday: "long",
+        }).format(d);
+        const fullDate = new Intl.DateTimeFormat("ar-EG-u-nu-latn", {
+          timeZone: "Africa/Cairo",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        }).format(d);
+        return { dayName, formattedDate: `${dayName}، ${fullDate}` };
+      } catch {
+        return { dayName: dateStr, formattedDate: dateStr };
+      }
+    };
+
+    const stats: FundDayStat[] = days.map(({ date, label }) => {
+      const matching = (data || []).filter((r: any) => r.request_date === date);
+      const approved = matching.filter((r: any) => r.status === "approved");
+      const pending = matching.filter((r: any) => r.status === "pending");
+      const rejected = matching.filter((r: any) => r.status === "rejected");
+      const totalTransferred = approved.reduce(
+        (sum: number, r: any) => sum + (Number(r.amount_approved) || 0),
+        0
+      );
+
+      const { dayName, formattedDate } = formatArabicDate(date);
+
+      return {
+        date,
+        dayLabel: label,
+        dayName,
+        formattedDate,
+        totalTransferred,
+        totalOperations: matching.length,
+        approvedCount: approved.length,
+        pendingCount: pending.length,
+        rejectedCount: rejected.length,
+      };
+    });
+
+    return { success: true, stats };
+  } catch (err: any) {
+    console.error("getFundRequestsLast3DaysStats error:", err);
+    return { success: false, error: err.message, stats: [] };
   }
 }
 

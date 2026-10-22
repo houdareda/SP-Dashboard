@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import {
   Coins,
   ClipboardList,
@@ -19,6 +20,14 @@ import {
   ArrowRightLeft,
   ArrowDownLeft,
   ArrowUpRight,
+  ArrowDownRight,
+  Edit3,
+  History,
+  MessageSquare,
+  Sparkles,
+  Search,
+  Filter,
+  Info,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import {
@@ -27,7 +36,16 @@ import {
   getAdminEditRequestsPaginated,
   getAdminWalletsWithBalances,
   getAdminCustodyTransfersPaginated,
+  getFundRequestsLast3DaysStats,
+  editApprovedFundRequest,
+  getAdminEditedFundRequests,
+  FundDayStat,
 } from "@/app/actions/adminOperations";
+import {
+  FundRequestEditRecord,
+  extractFundRequestEditHistory,
+  extractFundRequestWallets,
+} from "@/lib/fundUtils";
 import { getExpenseTransfers } from "@/app/actions/operations";
 import { MarketingSystem } from "@/app/actions/marketingSystems";
 
@@ -44,39 +62,148 @@ interface HistoryClientProps {
       count: number;
     }>;
   };
+  initialLast3DaysStats?: FundDayStat[];
   initialDailyExpenses: any[];
   initialExpenseCount: number;
   initialEditRequests: any[];
   initialEditCount: number;
   initialCustodyTransfers?: any[];
   initialTransferCount?: number;
+  initialEditedFundRequests?: any[];
   employees: any[];
   marketingSystems?: MarketingSystem[];
   userRole?: string;
 }
 
-type TabType = "fund-requests" | "daily-expenses" | "edit-requests" | "custody-transfers";
+type TabType = "fund-requests" | "fund-edits" | "daily-expenses" | "edit-requests" | "custody-transfers";
 
 export default function HistoryClient({
   initialFundRequests = [],
   initialFundCount = 0,
   initialFundSummary,
+  initialLast3DaysStats = [],
   initialDailyExpenses = [],
   initialExpenseCount = 0,
   initialEditRequests = [],
   initialEditCount = 0,
   initialCustodyTransfers = [],
   initialTransferCount = 0,
+  initialEditedFundRequests = [],
   employees = [],
   marketingSystems = [],
   userRole,
 }: HistoryClientProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>("fund-requests");
 
   // Local state for data & counts
   const [fundRequests, setFundRequests] = useState<any[]>(initialFundRequests);
   const [fundCount, setFundCount] = useState<number>(initialFundCount);
   const [fundPage, setFundPage] = useState<number>(1);
+
+  // Edited Fund Requests State
+  const [editedFundRequests, setEditedFundRequests] = useState<any[]>(initialEditedFundRequests || []);
+  const [editingFundRequest, setEditingFundRequest] = useState<any | null>(null);
+  const [editAmount, setEditAmount] = useState<string>("");
+  const [editDate, setEditDate] = useState<string>("");
+  const [editNotes, setEditNotes] = useState<string>("");
+  const [editMultiAmounts, setEditMultiAmounts] = useState<Record<string, string>>({});
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState<boolean>(false);
+  const [editModalError, setEditModalError] = useState<string | null>(null);
+  const [expandedEditHistoryIds, setExpandedEditHistoryIds] = useState<Record<string, boolean>>({});
+  const [editsSearchTerm, setEditsSearchTerm] = useState<string>("");
+
+  const toggleExpandHistory = (id: string) => {
+    setExpandedEditHistoryIds((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
+
+  const handleOpenEditModal = (req: any) => {
+    setEditingFundRequest(req);
+    const currentApproved = Number(req.amount_approved) || Number(req.amount_requested) || 0;
+    setEditAmount(String(currentApproved));
+    setEditDate(req.request_date || "");
+    setEditNotes("");
+    setEditModalError(null);
+
+    if (req.is_multi_wallet && Array.isArray(req.multi_wallet_data)) {
+      const initialMap: Record<string, string> = {};
+      const wallets = extractFundRequestWallets(req);
+      wallets.forEach((w: any) => {
+        initialMap[w.wallet_id] = String(w.amount_approved ?? w.amount_requested ?? 0);
+      });
+      setEditMultiAmounts(initialMap);
+    } else {
+      setEditMultiAmounts({});
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingFundRequest) return;
+    const parsedAmount = parseFloat(editAmount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      setEditModalError("يرجى إدخال مبلغ صحيح أكبر من الصفر.");
+      return;
+    }
+    if (!editNotes || !editNotes.trim()) {
+      setEditModalError("يرجى إدخال سبب / ملاحظات التعديل (مطلوب).");
+      return;
+    }
+
+    let multiBreakdown: Array<{ walletId: string; amountApproved: number }> | undefined = undefined;
+    if (editingFundRequest.is_multi_wallet) {
+      const wallets = extractFundRequestWallets(editingFundRequest);
+      multiBreakdown = [];
+      let total = 0;
+      for (const w of wallets) {
+        const val = parseFloat(editMultiAmounts[w.wallet_id] || "0");
+        if (isNaN(val) || val < 0) {
+          setEditModalError(`يرجى إدخال مبلغ صحيح للمحفظة ${w.phone_number}`);
+          return;
+        }
+        total += val;
+        multiBreakdown.push({
+          walletId: w.wallet_id,
+          amountApproved: val,
+        });
+      }
+      if (total <= 0) {
+        setEditModalError("يجب أن يكون إجمالي المبالغ أكبر من الصفر.");
+        return;
+      }
+    }
+
+    setIsSubmittingEdit(true);
+    setEditModalError(null);
+
+    try {
+      const res = await editApprovedFundRequest({
+        requestId: editingFundRequest.id,
+        newAmount: parsedAmount,
+        newDate: editDate,
+        notes: editNotes.trim(),
+        multiBreakdown,
+      });
+
+      if (res.success) {
+        setEditingFundRequest(null);
+        setFundRefresh((p) => p + 1);
+        const updatedEdits = await getAdminEditedFundRequests();
+        if (updatedEdits.success) {
+          setEditedFundRequests(updatedEdits.data);
+        }
+        router.refresh();
+      } else {
+        setEditModalError(res.error || "فشل تعديل الطلب.");
+      }
+    } catch (err: any) {
+      setEditModalError(err.message || "حدث خطأ غير متوقع.");
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
 
   const [dailyExpenses, setDailyExpenses] = useState<any[]>(initialDailyExpenses);
   const [expenseCount, setExpenseCount] = useState<number>(initialExpenseCount);
@@ -89,6 +216,11 @@ export default function HistoryClient({
   const [custodyTransfers, setCustodyTransfers] = useState<any[]>(initialCustodyTransfers);
   const [transferCount, setTransferCount] = useState<number>(initialTransferCount);
   const [transferPage, setTransferPage] = useState<number>(1);
+
+  // Refresh Triggers for Realtime updates
+  const [fundRefresh, setFundRefresh] = useState(0);
+  const [expenseRefresh, setExpenseRefresh] = useState(0);
+  const [editRefresh, setEditRefresh] = useState(0);
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
@@ -141,6 +273,41 @@ export default function HistoryClient({
     setTransferPage(1);
   }, [initialCustodyTransfers, initialTransferCount]);
 
+  useEffect(() => {
+    if (initialEditedFundRequests) {
+      setEditedFundRequests(initialEditedFundRequests);
+    }
+  }, [initialEditedFundRequests]);
+
+  // Rolling 3-Days Stats State
+  const [last3DaysStats, setLast3DaysStats] = useState<FundDayStat[]>(
+    initialLast3DaysStats || []
+  );
+
+  useEffect(() => {
+    if (initialLast3DaysStats && initialLast3DaysStats.length > 0) {
+      setLast3DaysStats(initialLast3DaysStats);
+    }
+  }, [initialLast3DaysStats]);
+
+  // Refetch 3-day stats & edited funds when fundRefresh changes (real-time or approval or edit)
+  useEffect(() => {
+    if (isFirstFundFetch.current) return;
+    async function refresh3DaysStats() {
+      const res = await getFundRequestsLast3DaysStats();
+      if (res.success && res.stats) {
+        setLast3DaysStats(res.stats);
+      }
+      if (userRole === "admin" || userRole === "accountant") {
+        const editsRes = await getAdminEditedFundRequests();
+        if (editsRes.success && editsRes.data) {
+          setEditedFundRequests(editsRes.data);
+        }
+      }
+    }
+    refresh3DaysStats();
+  }, [fundRefresh, userRole]);
+
   // Filters State
   // 1. Manual Transaction Date ("التاريخ" - request_date)
   const [startDate, setStartDate] = useState<string>("");
@@ -157,6 +324,24 @@ export default function HistoryClient({
   const [fundSummary, setFundSummary] = useState<any>(
     initialFundSummary || { totalTransferred: 0, approvedCount: 0, recipients: [] }
   );
+
+  const isDayCardSelected = (date: string) => {
+    return startDate === date && endDate === date && !actionStartDate && !actionEndDate;
+  };
+
+  const handleDayCardClick = (date: string) => {
+    if (isDayCardSelected(date)) {
+      setStartDate("");
+      setEndDate("");
+    } else {
+      setStartDate(date);
+      setEndDate(date);
+      setActionStartDate("");
+      setActionEndDate("");
+      setSelectedStatus("all");
+    }
+    setFundPage(1);
+  };
 
   // Quick date setter helper
   const handleSetQuickDate = (
@@ -223,11 +408,6 @@ export default function HistoryClient({
       }
     }
   };
-
-  // Refresh Triggers for Realtime updates
-  const [fundRefresh, setFundRefresh] = useState(0);
-  const [expenseRefresh, setExpenseRefresh] = useState(0);
-  const [editRefresh, setEditRefresh] = useState(0);
 
   // Load all agent wallets dynamically on mount
   useEffect(() => {
@@ -383,6 +563,35 @@ export default function HistoryClient({
     setExpensePage(1);
     setEditPage(1);
   }, [startDate, endDate, actionStartDate, actionEndDate, selectedStatus, selectedWallets, selectedAgentIds]);
+
+  // Filtered Edited Fund Requests for the Dedicated Tab
+  const filteredEditedFundRequests = useMemo(() => {
+    return editedFundRequests.filter((req) => {
+      // Filter by agent dropdown
+      if (selectedAgentIds.length > 0 && !selectedAgentIds.includes(req.agent_id)) {
+        return false;
+      }
+      // Filter by manual date (startDate / endDate)
+      if (startDate && req.request_date < startDate) return false;
+      if (endDate && req.request_date > endDate) return false;
+      // Search term
+      if (editsSearchTerm && editsSearchTerm.trim()) {
+        const term = editsSearchTerm.trim().toLowerCase();
+        const agentName = (req.agent?.full_name || "").toLowerCase();
+        const history = extractFundRequestEditHistory(req.multi_wallet_data);
+        const notesMatch = history.some(
+          (h) =>
+            (h.notes || "").toLowerCase().includes(term) ||
+            (h.editor_name || "").toLowerCase().includes(term)
+        );
+        const phoneMatch = (req.wallet?.phone_number || "").includes(term);
+        if (!agentName.includes(term) && !notesMatch && !phoneMatch) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [editedFundRequests, selectedAgentIds, startDate, endDate, editsSearchTerm]);
 
   // Subscribe to real-time updates from Supabase to silently trigger refetching
   useEffect(() => {
@@ -631,6 +840,151 @@ export default function HistoryClient({
         <h1 className="text-2xl md:text-3xl font-extrabold text-white">سجل العمليات العام</h1>
         <p className="text-sm text-brand-dim">متابعة وتصفية كافة المعاملات المالية وتقارير المصروفات الخاصة بجميع الموظفين.</p>
       </div>
+
+      {/* 3-Days Rolling Summary Section (Fund Requests) */}
+      {activeTab === "fund-requests" && last3DaysStats.length > 0 && (
+        <div className="space-y-3 animate-fade-in">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-brand-accent/15 border border-brand-accent/30 flex items-center justify-center text-brand-accent shadow-[0_0_12px_rgba(139,92,246,0.2)] shrink-0">
+                <Coins size={16} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm md:text-base font-bold text-white">إجمالي العمليات والفلوس لآخر 3 أيام</h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-brand-accent/15 text-brand-accent border border-brand-accent/30">
+                    مباشر ومتحرك
+                  </span>
+                </div>
+                <span className="text-[11px] text-brand-dim block">اضغط على أي مربع لتصفية وعرض كل عمليات اليوم بتفاصيلها فوراً.</span>
+              </div>
+            </div>
+
+            {/* If any of the 3 days is active, show clear selection button */}
+            {last3DaysStats.some((s) => isDayCardSelected(s.date)) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setStartDate("");
+                  setEndDate("");
+                  setFundPage(1);
+                }}
+                className="text-xs font-bold text-brand-accent hover:text-brand-accent/80 transition-colors flex items-center gap-1.5 cursor-pointer bg-brand-accent/10 border border-brand-accent/25 px-3 py-1.5 rounded-xl hover:bg-brand-accent/20 active:scale-[0.98]"
+              >
+                <RotateCcw size={12} />
+                <span>إلغاء التحديد وعرض كل الأيام</span>
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {last3DaysStats.map((item) => {
+              const isSelected = isDayCardSelected(item.date);
+
+              // Distinct theme colors based on dayLabel
+              const theme =
+                item.dayLabel === "today"
+                  ? {
+                      badgeBg: "bg-emerald-500/15 border-emerald-500/30 text-emerald-400",
+                      badgeLabel: "اليوم",
+                      activeBorder: "border-emerald-400 ring-2 ring-emerald-400/50 shadow-[0_0_25px_rgba(16,185,129,0.25)]",
+                      hoverBorder: "hover:border-emerald-500/50",
+                      amountColor: "text-emerald-400",
+                    }
+                  : item.dayLabel === "yesterday"
+                  ? {
+                      badgeBg: "bg-cyan-500/15 border-cyan-500/30 text-cyan-400",
+                      badgeLabel: "أمس",
+                      activeBorder: "border-cyan-400 ring-2 ring-cyan-400/50 shadow-[0_0_25px_rgba(6,182,212,0.25)]",
+                      hoverBorder: "hover:border-cyan-500/50",
+                      amountColor: "text-cyan-400",
+                    }
+                  : {
+                      badgeBg: "bg-purple-500/15 border-purple-500/30 text-purple-400",
+                      badgeLabel: "أول أمس",
+                      activeBorder: "border-purple-400 ring-2 ring-purple-400/50 shadow-[0_0_25px_rgba(168,85,247,0.25)]",
+                      hoverBorder: "hover:border-purple-500/50",
+                      amountColor: "text-purple-400",
+                    };
+
+              return (
+                <button
+                  key={item.date}
+                  type="button"
+                  onClick={() => handleDayCardClick(item.date)}
+                  className={`relative p-4 rounded-2xl border text-right transition-all duration-300 cursor-pointer group flex flex-col justify-between gap-3.5 backdrop-blur-xl ${
+                    isSelected
+                      ? `bg-gradient-to-br from-[#161a36] via-[#10142d] to-[#0c0f24] ${theme.activeBorder}`
+                      : `bg-[#0c0f1e]/80 border-brand-border/60 ${theme.hoverBorder} hover:bg-[#0f1326] shadow-lg`
+                  }`}
+                >
+                  {/* Top: Day Label, Arabic Date & Selection Indicator */}
+                  <div className="flex items-center justify-between w-full gap-2 border-b border-white/5 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded-md text-[11px] font-extrabold border ${theme.badgeBg}`}>
+                        {theme.badgeLabel}
+                      </span>
+                      <span className="text-xs font-bold text-white">{item.formattedDate}</span>
+                    </div>
+
+                    {isSelected ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full shrink-0">
+                        <Check size={11} className="stroke-[3]" />
+                        <span>محدد الآن</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-brand-dim/50 group-hover:text-brand-accent transition-colors flex items-center gap-0.5 shrink-0">
+                        <span>عرض اليوم</span>
+                        <ArrowUpRight size={11} />
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Middle: Amount & Total Count */}
+                  <div className="flex items-end justify-between gap-3 w-full">
+                    <div>
+                      <span className="text-[10px] font-semibold text-brand-dim/70 block">إجمالي الفلوس المحولة:</span>
+                      <div className="flex items-baseline gap-1 mt-0.5">
+                        <span className={`text-2xl md:text-3xl font-black font-inter tracking-tight ${theme.amountColor}`}>
+                          {item.totalTransferred.toLocaleString("en-US")}
+                        </span>
+                        <span className="text-xs text-brand-dim font-normal font-cairo">ج.م</span>
+                      </div>
+                    </div>
+
+                    <div className="text-left shrink-0">
+                      <span className="inline-block px-2.5 py-1 rounded-xl bg-white/[0.04] border border-white/10 text-xs font-bold text-white/90 font-inter">
+                        {item.totalOperations} <span className="text-[10px] text-brand-dim font-cairo">عملية</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Bottom: Breakdown Pills (قبلنا - انتظار - رفضنا) */}
+                  <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-white/5 w-full text-center">
+                    {/* Approved */}
+                    <div className="px-2 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 space-y-0.5">
+                      <span className="block text-[9.5px] font-bold text-emerald-300/80 font-cairo">قبلنا</span>
+                      <span className="block text-xs font-bold font-inter">{item.approvedCount}</span>
+                    </div>
+
+                    {/* Pending */}
+                    <div className="px-2 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 space-y-0.5">
+                      <span className="block text-[9.5px] font-bold text-amber-300/80 font-cairo">انتظار</span>
+                      <span className="block text-xs font-bold font-inter">{item.pendingCount}</span>
+                    </div>
+
+                    {/* Rejected */}
+                    <div className="px-2 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 space-y-0.5">
+                      <span className="block text-[9.5px] font-bold text-red-300/80 font-cairo">رفضنا</span>
+                      <span className="block text-xs font-bold font-inter">{item.rejectedCount}</span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Filters Toolbar */}
       <div className="bg-[#0c0f1d] border border-brand-border/40 p-5 rounded-2xl space-y-4 w-full">
@@ -1090,67 +1444,95 @@ export default function HistoryClient({
         )}
       </div>
 
-      {/* Tabs Controller - Only show all tabs if NOT accountant */}
-      {userRole !== "accountant" && (
-        <div className="flex items-center gap-2 border-b border-brand-border/40 pb-px overflow-x-auto scrollbar-none">
+      {/* Tabs Controller */}
+      <div className="flex items-center gap-2 border-b border-brand-border/40 pb-px overflow-x-auto scrollbar-none">
+        {/* Tab 1: Fund Requests (Always visible) */}
+        <button
+          onClick={() => {
+            setActiveTab("fund-requests");
+            setSelectedStatus("all");
+          }}
+          className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all duration-300 cursor-pointer shrink-0 ${
+            activeTab === "fund-requests"
+              ? "border-brand-accent text-white"
+              : "border-transparent text-white/50 hover:text-white/80"
+          }`}
+        >
+          <Coins size={16} />
+          <span>طلبات الأموال للجميع</span>
+        </button>
+
+        {/* Tab 1.5: Fund Edits (Dedicated to Accountant & Admin) */}
+        {(userRole === "admin" || userRole === "accountant") && (
           <button
             onClick={() => {
-              setActiveTab("fund-requests");
+              setActiveTab("fund-edits");
               setSelectedStatus("all");
             }}
             className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all duration-300 cursor-pointer shrink-0 ${
-              activeTab === "fund-requests"
-                ? "border-brand-accent text-white"
+              activeTab === "fund-edits"
+                ? "border-amber-400 text-white"
                 : "border-transparent text-white/50 hover:text-white/80"
             }`}
           >
-            <Coins size={16} />
-            <span>طلبات الأموال للجميع</span>
+            <History size={16} className={activeTab === "fund-edits" ? "text-amber-400" : ""} />
+            <span>سجل طلبات الأموال المعدلة</span>
+            {editedFundRequests.length > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-inter bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                {editedFundRequests.length}
+              </span>
+            )}
           </button>
-          <button
-            onClick={() => {
-              setActiveTab("daily-expenses");
-              setSelectedStatus("all");
-            }}
-            className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all duration-300 cursor-pointer shrink-0 ${
-              activeTab === "daily-expenses"
-                ? "border-brand-accent text-white"
-                : "border-transparent text-white/50 hover:text-white/80"
-            }`}
-          >
-            <ClipboardList size={16} />
-            <span>المصاريف والتحويلات للجميع</span>
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab("edit-requests");
-              setSelectedStatus("all");
-            }}
-            className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all duration-300 cursor-pointer shrink-0 ${
-              activeTab === "edit-requests"
-                ? "border-brand-accent text-white"
-                : "border-transparent text-white/50 hover:text-white/80"
-            }`}
-          >
-            <FileEdit size={16} />
-            <span>طلبات التعديل للجميع</span>
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab("custody-transfers");
-              setSelectedStatus("all");
-            }}
-            className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all duration-300 cursor-pointer shrink-0 ${
-              activeTab === "custody-transfers"
-                ? "border-brand-accent text-white"
-                : "border-transparent text-white/50 hover:text-white/80"
-            }`}
-          >
-            <ArrowRightLeft size={16} />
-            <span>تحويلات العهدة بين الزملاء</span>
-          </button>
-        </div>
-      )}
+        )}
+
+        {/* Other Tabs (Hidden for Accountant) */}
+        {userRole !== "accountant" && (
+          <>
+            <button
+              onClick={() => {
+                setActiveTab("daily-expenses");
+                setSelectedStatus("all");
+              }}
+              className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all duration-300 cursor-pointer shrink-0 ${
+                activeTab === "daily-expenses"
+                  ? "border-brand-accent text-white"
+                  : "border-transparent text-white/50 hover:text-white/80"
+              }`}
+            >
+              <ClipboardList size={16} />
+              <span>المصاريف والتحويلات للجميع</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab("edit-requests");
+                setSelectedStatus("all");
+              }}
+              className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all duration-300 cursor-pointer shrink-0 ${
+                activeTab === "edit-requests"
+                  ? "border-brand-accent text-white"
+                  : "border-transparent text-white/50 hover:text-white/80"
+              }`}
+            >
+              <FileEdit size={16} />
+              <span>طلبات التعديل للجميع</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab("custody-transfers");
+                setSelectedStatus("all");
+              }}
+              className={`flex items-center gap-2 px-5 py-3 border-b-2 font-bold text-sm transition-all duration-300 cursor-pointer shrink-0 ${
+                activeTab === "custody-transfers"
+                  ? "border-brand-accent text-white"
+                  : "border-transparent text-white/50 hover:text-white/80"
+              }`}
+            >
+              <ArrowRightLeft size={16} />
+              <span>تحويلات العهدة بين الزملاء</span>
+            </button>
+          </>
+        )}
+      </div>
 
       {/* Tab Panels */}
       <div className="bg-[#0a0d16]/60 border border-brand-border/40 backdrop-blur-xl rounded-3xl p-6 shadow-xl animate-fade-in min-h-[350px] relative">
@@ -1328,91 +1710,655 @@ export default function HistoryClient({
                       <th className="pb-3.5 font-bold">المبلغ المحول</th>
                       <th className="pb-3.5 font-bold text-center">حالة الطلب</th>
                       <th className="pb-3.5 pl-2 font-bold text-left">توقيت الإجراء</th>
+                      {(userRole === "admin" || userRole === "accountant") && (
+                        <th className="pb-3.5 pl-2 font-bold text-center">الإجراءات</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
-                    {fundRequests.map((req) => (
-                      <tr
-                        key={req.id}
-                        className="border-b border-brand-border/20 text-xs text-white/80 hover:bg-white/[0.02] transition-colors"
-                      >
-                        <td className="py-4 pr-2 font-bold text-brand-accent capitalize">
-                          {req.agent?.full_name || "-"}
-                        </td>
-                        <td className="py-4 font-medium">
-                          {formatDate(req.request_date)}
-                        </td>
-                        <td className="py-4 font-mono font-bold text-white/90">
-                          {req.is_multi_wallet ? (
-                            <div className="space-y-0.5 text-right font-cairo">
-                              <span className="inline-block px-1.5 py-0.5 text-[8.5px] font-extrabold bg-brand-accent/20 text-brand-accent border border-brand-accent/30 rounded-md mb-1">
-                                متعدد المحافظ
-                              </span>
-                              {Array.isArray(req.multi_wallet_data) ? (
-                                req.multi_wallet_data.map((item: any, idx: number) => (
-                                  <div key={idx} className="text-[10px] font-semibold text-white/80">
-                                    {item.phone_number} {item.esim_number ? `(${item.esim_number})` : ""}
-                                  </div>
-                                ))
-                              ) : (
-                                <span>{req.wallet?.phone_number || "-"}</span>
-                              )}
-                            </div>
-                          ) : (
-                            req.wallet?.phone_number || "-"
-                          )}
-                        </td>
-                        <td className="py-4 font-bold text-white font-inter text-sm">
-                          <div>{Number(req.amount_requested).toLocaleString("en-US")}</div>
-                          {req.is_multi_wallet && Array.isArray(req.multi_wallet_data) && (
-                            <div className="text-[9.5px] text-brand-dim/80 space-y-0.5 mt-0.5 font-normal font-inter">
-                              {req.multi_wallet_data.map((item: any, idx: number) => (
-                                <div key={idx}>
-                                  {Number(item.amount_requested || item.amount).toLocaleString("en-US")}
+                    {fundRequests.map((req) => {
+                      const history = extractFundRequestEditHistory(req.multi_wallet_data);
+                      const isHistoryExpanded = Boolean(expandedEditHistoryIds[req.id]);
+                      const wallets = extractFundRequestWallets(req);
+
+                      return (
+                        <React.Fragment key={req.id}>
+                          <tr className="border-b border-brand-border/20 text-xs text-white/80 hover:bg-white/[0.02] transition-colors">
+                            <td className="py-4 pr-2 font-bold text-brand-accent capitalize">
+                              <div className="flex items-center gap-1.5">
+                                {history.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleExpandHistory(req.id)}
+                                    className="cursor-pointer text-amber-400 hover:text-amber-300 transition-colors"
+                                    title="يوجد تعديلات على هذا الطلب"
+                                  >
+                                    <ChevronDown
+                                      size={14}
+                                      className={`transition-transform duration-200 ${
+                                        isHistoryExpanded ? "rotate-180" : ""
+                                      }`}
+                                    />
+                                  </button>
+                                )}
+                                <span>{req.agent?.full_name || "-"}</span>
+                              </div>
+                            </td>
+                            <td className="py-4 font-medium font-inter">
+                              {formatDate(req.request_date)}
+                            </td>
+                            <td className="py-4 font-mono font-bold text-white/90">
+                              {req.is_multi_wallet ? (
+                                <div className="space-y-0.5 text-right font-cairo">
+                                  <span className="inline-block px-1.5 py-0.5 text-[8.5px] font-extrabold bg-brand-accent/20 text-brand-accent border border-brand-accent/30 rounded-md mb-1">
+                                    متعدد المحافظ
+                                  </span>
+                                  {wallets.length > 0 ? (
+                                    wallets.map((item: any, idx: number) => (
+                                      <div key={idx} className="text-[10px] font-semibold text-white/80">
+                                        {item.phone_number} {item.esim_number ? `(${item.esim_number})` : ""}
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <span>{req.wallet?.phone_number || "-"}</span>
+                                  )}
                                 </div>
-                              ))}
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-4 font-inter">
-                          {req.status === "approved" ? (
-                            <div>
-                              <span className="font-bold text-brand-accent text-sm">
-                                {Number(req.amount_approved).toLocaleString("en-US")}
-                              </span>
-                              {req.is_multi_wallet && Array.isArray(req.multi_wallet_data) && (
-                                <div className="text-[9.5px] text-brand-dim/80 space-y-0.5 mt-0.5 font-normal">
-                                  {req.multi_wallet_data.map((item: any, idx: number) => (
+                              ) : (
+                                req.wallet?.phone_number || "-"
+                              )}
+                            </td>
+                            <td className="py-4 font-bold text-white font-inter text-sm">
+                              <div>{Number(req.amount_requested).toLocaleString("en-US")}</div>
+                              {req.is_multi_wallet && wallets.length > 0 && (
+                                <div className="text-[9.5px] text-brand-dim/80 space-y-0.5 mt-0.5 font-normal font-inter">
+                                  {wallets.map((item: any, idx: number) => (
                                     <div key={idx}>
-                                      {Number(item.amount_approved).toLocaleString("en-US")}
+                                      {Number(item.amount_requested || item.amount).toLocaleString("en-US")}
                                     </div>
                                   ))}
                                 </div>
                               )}
-                            </div>
-                          ) : (
-                            <span className="text-brand-dim/30">—</span>
+                            </td>
+                            <td className="py-4 font-inter">
+                              {req.status === "approved" ? (
+                                <div>
+                                  <span className="font-bold text-brand-accent text-sm">
+                                    {Number(req.amount_approved).toLocaleString("en-US")}
+                                  </span>
+                                  {req.is_multi_wallet && wallets.length > 0 && (
+                                    <div className="text-[9.5px] text-brand-dim/80 space-y-0.5 mt-0.5 font-normal">
+                                      {wallets.map((item: any, idx: number) => (
+                                        <div key={idx}>
+                                          {Number(item.amount_approved).toLocaleString("en-US")}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {history.length > 0 && (
+                                    <div>
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleExpandHistory(req.id)}
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 cursor-pointer hover:bg-amber-500/25 transition-all mt-1"
+                                        title="تم تعديل هذا الطلب - اضغط لعرض تفاصيل التعديل"
+                                      >
+                                        <History size={10} />
+                                        <span>مُعدّل ({history.length})</span>
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-brand-dim/30">—</span>
+                              )}
+                            </td>
+                            <td className="py-4 text-center">
+                              {renderStatusBadge(
+                                req.status,
+                                req.reviewer?.full_name,
+                                req.approved_at
+                              )}
+                            </td>
+                            <td className="py-4 pl-2 font-mono text-brand-dim/70 text-left">
+                              {req.status !== "pending" && req.approved_at ? (
+                                <span>{formatDateTime(req.approved_at)}</span>
+                              ) : (
+                                <span className="text-brand-dim/30">قيد الانتظار...</span>
+                              )}
+                            </td>
+
+                            {/* Actions Column */}
+                            {(userRole === "admin" || userRole === "accountant") && (
+                              <td className="py-4 pl-2 text-center" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  {req.status === "approved" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEditModal(req)}
+                                      className="px-2.5 py-1.5 rounded-lg bg-brand-accent/15 hover:bg-brand-accent/25 border border-brand-accent/30 text-brand-accent font-bold text-[11px] transition-all flex items-center gap-1 cursor-pointer active:scale-95 shadow-sm"
+                                      title="تعديل المبلغ أو التاريخ أو إضافة ملاحظات"
+                                    >
+                                      <Edit3 size={12} />
+                                      <span>تعديل</span>
+                                    </button>
+                                  )}
+                                  {history.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleExpandHistory(req.id)}
+                                      className={`px-2 py-1.5 rounded-lg border text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer ${
+                                        isHistoryExpanded
+                                          ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
+                                          : "bg-white/5 hover:bg-white/10 border-white/10 text-brand-dim hover:text-white"
+                                      }`}
+                                      title="عرض سجل التعديلات"
+                                    >
+                                      <History size={12} className="text-amber-400" />
+                                      <ChevronDown
+                                        size={11}
+                                        className={`transition-transform duration-200 ${
+                                          isHistoryExpanded ? "rotate-180 text-amber-400" : ""
+                                        }`}
+                                      />
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+
+                          {/* Expanded Full Audit Timeline Row inside fund-requests tab */}
+                          {isHistoryExpanded && history.length > 0 && (
+                            <tr className="bg-[#0b0e1e]/95 border-b border-brand-border/40 animate-fade-in">
+                              <td colSpan={(userRole === "admin" || userRole === "accountant") ? 8 : 7} className="p-4 md:p-5">
+                                <div className="space-y-3.5 max-w-4xl mr-auto ml-0">
+                                  <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+                                    <div className="flex items-center gap-2">
+                                      <History size={16} className="text-amber-400" />
+                                      <h5 className="text-xs font-bold text-white">
+                                        سجل التعديلات والتدقيق المحاسبي لهذا الطلب ({history.length} تعديل)
+                                      </h5>
+                                    </div>
+                                    {req.status === "approved" && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenEditModal(req)}
+                                        className="text-xs font-bold text-brand-accent hover:text-brand-accent/80 transition-colors flex items-center gap-1 cursor-pointer"
+                                      >
+                                        <Edit3 size={12} />
+                                        <span>إجراء تعديل إضافي</span>
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <div className="space-y-2.5">
+                                    {history.map((record: FundRequestEditRecord, idx: number) => {
+                                      const isLatest = idx === 0;
+                                      return (
+                                        <div
+                                          key={record.id || idx}
+                                          className={`p-3.5 rounded-xl border text-xs space-y-2 ${
+                                            isLatest
+                                              ? "bg-[#0e142a] border-amber-500/35"
+                                              : "bg-[#070914] border-brand-border/25"
+                                          }`}
+                                        >
+                                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2">
+                                            <div className="flex items-center gap-2">
+                                              <span
+                                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                                  isLatest
+                                                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                                    : "bg-white/10 text-white/60 border border-white/15"
+                                                }`}
+                                              >
+                                                {isLatest ? "التعديل الأحدث" : `تعديل سابق (#${history.length - idx})`}
+                                              </span>
+                                              <span className="font-bold text-white text-xs">
+                                                بواسطة:{" "}
+                                                <span className="text-brand-accent">{record.editor_name}</span>{" "}
+                                                <span className="text-[9.5px] text-brand-dim font-normal font-cairo">
+                                                  ({record.editor_role === "admin" ? "المدير" : "المحاسب"})
+                                                </span>
+                                              </span>
+                                            </div>
+                                            <div className="text-[11px] font-mono text-brand-dim/70 flex items-center gap-1">
+                                              <Clock size={11} />
+                                              <span>{formatDateTime(record.edited_at)}</span>
+                                            </div>
+                                          </div>
+
+                                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                                            <div className="bg-[#05060f]/60 p-2 rounded-lg border border-brand-border/20">
+                                              <span className="text-[10px] text-brand-dim block font-bold">المبلغ المعتمد:</span>
+                                              <div className="flex items-center gap-2 font-inter mt-0.5">
+                                                <span className="line-through text-red-400 font-bold">
+                                                  {record.old_amount.toLocaleString("en-US")}
+                                                </span>
+                                                <span className="text-white/40">←</span>
+                                                <span className="text-emerald-400 font-bold">
+                                                  {record.new_amount.toLocaleString("en-US")} ج.م
+                                                </span>
+                                              </div>
+                                              <span className="text-[9.5px] text-brand-dim/70 block mt-0.5">
+                                                الفرق: {record.difference > 0 ? `+${record.difference.toLocaleString("en-US")}` : record.difference.toLocaleString("en-US")} ج.م
+                                              </span>
+                                            </div>
+
+                                            <div className="bg-[#05060f]/60 p-2 rounded-lg border border-brand-border/20">
+                                              <span className="text-[10px] text-brand-dim block font-bold">تاريخ المعاملة:</span>
+                                              <div className="flex items-center gap-1.5 font-inter text-xs mt-0.5">
+                                                {record.old_date !== record.new_date ? (
+                                                  <>
+                                                    <span className="line-through text-white/50">{record.old_date}</span>
+                                                    <span className="text-white/40">←</span>
+                                                    <span className="text-brand-accent font-bold">{record.new_date}</span>
+                                                  </>
+                                                ) : (
+                                                  <span className="text-white font-medium">{record.new_date}</span>
+                                                )}
+                                              </div>
+                                            </div>
+
+                                            <div className="bg-[#05060f]/60 p-2 rounded-lg border border-brand-border/20">
+                                              <span className="text-[10px] text-brand-dim block font-bold flex items-center gap-1">
+                                                <MessageSquare size={10} className="text-amber-400" />
+                                                <span>ملاحظات التعديل:</span>
+                                              </span>
+                                              <p className="text-white text-xs leading-relaxed font-cairo mt-0.5 bg-white/[0.02] p-1 rounded">
+                                                {record.notes}
+                                              </p>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
                           )}
-                        </td>
-                        <td className="py-4 text-center">
-                          {renderStatusBadge(
-                            req.status,
-                            req.reviewer?.full_name,
-                            req.approved_at
-                          )}
-                        </td>
-                        <td className="py-4 pl-2 font-mono text-brand-dim/70 text-left">
-                          {req.status !== "pending" && req.approved_at ? (
-                            <span>{formatDateTime(req.approved_at)}</span>
-                          ) : (
-                            <span className="text-brand-dim/30">قيد الانتظار...</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                        </React.Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
                 {renderPaginationControls(fundPage, fundCount, Math.ceil(fundCount / 20), setFundPage)}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 1.5: Fund Edits (Dedicated to Accountant & Admin) */}
+        {(userRole === "admin" || userRole === "accountant") && activeTab === "fund-edits" && (
+          <div className="space-y-5 animate-fade-in">
+            {/* Header Title & Summary Card */}
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <History size={18} className="text-amber-400" />
+                    <span>سجل طلبات شحن الرصيد المعدلة</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                      خاص بالمحاسب والمدير
+                    </span>
+                  </h3>
+                  <p className="text-xs text-brand-dim mt-0.5">
+                    متابعة وتصفية كافة طلبات الأموال التي تم تعديل قيمتها أو بياناتها بعد الموافقة، مع تفاصيل القائم بالتعديل والملاحظات وفروق المبالغ.
+                  </p>
+                </div>
+              </div>
+
+              {/* Summary KPIs */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-gradient-to-br from-[#0e1224] to-[#070914] border border-brand-border/40 p-4 rounded-2xl flex items-center gap-3 shadow-lg">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                    <History size={20} />
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-bold text-brand-dim/70 block">عدد العمليات المعدلة</span>
+                    <span className="text-lg font-extrabold text-white font-inter">
+                      {filteredEditedFundRequests.length}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-[#0e1224] to-[#070914] border border-brand-border/40 p-4 rounded-2xl flex items-center gap-3 shadow-lg">
+                  <div className="w-10 h-10 rounded-xl bg-brand-accent/15 border border-brand-accent/30 flex items-center justify-center text-brand-accent shrink-0">
+                    <Coins size={20} />
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-bold text-brand-dim/70 block">إجمالي المبالغ الحالية المعتمدة</span>
+                    <span className="text-lg font-extrabold text-brand-accent font-inter">
+                      {filteredEditedFundRequests
+                        .reduce((sum, r) => sum + (Number(r.amount_approved) || 0), 0)
+                        .toLocaleString("en-US")}{" "}
+                      ج.م
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-[#0e1224] to-[#070914] border border-brand-border/40 p-4 rounded-2xl flex items-center gap-3 shadow-lg">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
+                    <Sparkles size={20} />
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-bold text-brand-dim/70 block">إجمالي الفروق المحاسبية</span>
+                    {(() => {
+                      const netDiff = filteredEditedFundRequests.reduce((sum, r) => {
+                        const history = extractFundRequestEditHistory(r.multi_wallet_data);
+                        const first = history[history.length - 1];
+                        const original = first ? first.old_amount : Number(r.amount_approved) || 0;
+                        return sum + ((Number(r.amount_approved) || 0) - original);
+                      }, 0);
+                      return (
+                        <span
+                          className={`text-lg font-extrabold font-inter ${
+                            netDiff < 0
+                              ? "text-amber-400"
+                              : netDiff > 0
+                              ? "text-emerald-400"
+                              : "text-white"
+                          }`}
+                        >
+                          {netDiff > 0 ? `+${netDiff.toLocaleString("en-US")}` : `${netDiff.toLocaleString("en-US")}`} ج.م
+                        </span>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Search & Quick Filter */}
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-[#070912]/80 border border-brand-border/30 p-3 rounded-xl">
+                <div className="relative flex-1 min-w-[240px]">
+                  <input
+                    type="text"
+                    value={editsSearchTerm}
+                    onChange={(e) => setEditsSearchTerm(e.target.value)}
+                    placeholder="بحث باسم الموظف، الملاحظات، أو القائم بالتعديل..."
+                    className="w-full bg-[#0c0e1a] border border-brand-border/50 rounded-lg pl-3 pr-9 py-2 text-xs text-white placeholder-brand-dim/40 focus:outline-none focus:border-brand-accent transition-all text-right font-cairo"
+                  />
+                  <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30" />
+                </div>
+                {editsSearchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setEditsSearchTerm("")}
+                    className="text-xs text-brand-dim hover:text-white transition-colors cursor-pointer flex items-center gap-1"
+                  >
+                    <X size={12} />
+                    <span>مسح البحث</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {filteredEditedFundRequests.length === 0 ? (
+              renderEmptyState("لا توجد طلبات أموال معدلة مطابقة للفلاتر.", History)
+            ) : (
+              <div className="overflow-x-auto custom-scrollbar">
+                <table className="w-full text-right border-collapse min-w-[950px]">
+                  <thead>
+                    <tr className="border-b border-brand-border/40 text-brand-dim/70 text-xs font-bold">
+                      <th className="pb-3.5 pr-2 font-bold">الموظف</th>
+                      <th className="pb-3.5 font-bold">تاريخ المعاملة</th>
+                      <th className="pb-3.5 font-bold">المبلغ قبل التعديل</th>
+                      <th className="pb-3.5 font-bold">المبلغ الحالي</th>
+                      <th className="pb-3.5 font-bold">صافي الفرق</th>
+                      <th className="pb-3.5 font-bold">آخر تعديل بواسطة</th>
+                      <th className="pb-3.5 font-bold">توقيت التعديل</th>
+                      <th className="pb-3.5 font-bold">ملاحظات المحاسب</th>
+                      <th className="pb-3.5 pl-2 font-bold text-center">إجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredEditedFundRequests.map((req) => {
+                      const history = extractFundRequestEditHistory(req.multi_wallet_data);
+                      const latestEdit = history[0];
+                      const firstEdit = history[history.length - 1];
+                      const originalBeforeEdits = firstEdit ? firstEdit.old_amount : Number(req.amount_requested);
+                      const currentAmount = Number(req.amount_approved) || 0;
+                      const netDiff = currentAmount - originalBeforeEdits;
+                      const isExpanded = Boolean(expandedEditHistoryIds[req.id]);
+
+                      return (
+                        <React.Fragment key={req.id}>
+                          <tr
+                            onClick={() => toggleExpandHistory(req.id)}
+                            className={`border-b border-brand-border/20 text-xs text-white/80 hover:bg-white/[0.03] transition-colors cursor-pointer ${
+                              isExpanded ? "bg-white/[0.02]" : ""
+                            }`}
+                          >
+                            <td className="py-4 pr-2 font-bold text-brand-accent capitalize">
+                              <div className="flex items-center gap-2">
+                                <ChevronDown
+                                  size={14}
+                                  className={`text-brand-dim transition-transform duration-200 ${
+                                    isExpanded ? "rotate-180 text-brand-accent" : ""
+                                  }`}
+                                />
+                                <span>{req.agent?.full_name || "-"}</span>
+                              </div>
+                            </td>
+                            <td className="py-4 font-medium font-inter">
+                              {formatDate(req.request_date)}
+                            </td>
+                            <td className="py-4 font-bold font-inter text-brand-dim/80">
+                              <span className="line-through decoration-red-400/60">
+                                {originalBeforeEdits.toLocaleString("en-US")}
+                              </span>{" "}
+                              ج.م
+                            </td>
+                            <td className="py-4 font-bold font-inter text-white text-sm">
+                              <span className="text-emerald-400">
+                                {currentAmount.toLocaleString("en-US")}
+                              </span>{" "}
+                              ج.م
+                            </td>
+                            <td className="py-4 font-inter">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold ${
+                                  netDiff < 0
+                                    ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                                    : netDiff > 0
+                                    ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                                    : "bg-white/10 text-white/70 border border-white/20"
+                                }`}
+                              >
+                                {netDiff < 0 ? (
+                                  <ArrowDownRight size={11} />
+                                ) : netDiff > 0 ? (
+                                  <ArrowUpRight size={11} />
+                                ) : null}
+                                <span>
+                                  {netDiff > 0
+                                    ? `+${netDiff.toLocaleString("en-US")}`
+                                    : netDiff.toLocaleString("en-US")}{" "}
+                                  ج.م
+                                </span>
+                              </span>
+                            </td>
+                            <td className="py-4 font-cairo">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-white text-xs">
+                                  {latestEdit?.editor_name || "محاسب"}
+                                </span>
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-brand-accent/20 text-brand-accent border border-brand-accent/30 font-semibold">
+                                  {latestEdit?.editor_role === "admin" ? "مدير" : "محاسب"}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-4 font-mono text-brand-dim/70 text-xs">
+                              {latestEdit?.edited_at ? formatDateTime(latestEdit.edited_at) : "-"}
+                            </td>
+                            <td
+                              className="py-4 max-w-[200px] truncate text-brand-dim text-xs"
+                              title={latestEdit?.notes || ""}
+                            >
+                              {latestEdit?.notes ? (
+                                <span className="italic text-white/90">"{latestEdit.notes}"</span>
+                              ) : (
+                                <span className="text-brand-dim/30">—</span>
+                              )}
+                            </td>
+                            <td className="py-4 pl-2 text-center" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditModal(req)}
+                                  className="px-2.5 py-1.5 rounded-lg bg-brand-accent/15 hover:bg-brand-accent/25 border border-brand-accent/30 text-brand-accent font-bold text-[11px] transition-all flex items-center gap-1 cursor-pointer active:scale-95 shadow-sm"
+                                  title="تعديل هذا الطلب"
+                                >
+                                  <Edit3 size={12} />
+                                  <span>تعديل إضافي</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpandHistory(req.id)}
+                                  className="px-2 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-brand-dim hover:text-white text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                                  title="عرض أو إخفاء السجل التفصيلي"
+                                >
+                                  <History size={12} className="text-amber-400" />
+                                  <span className="font-inter text-[10px] text-amber-400 font-bold">
+                                    {history.length}
+                                  </span>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+
+                          {/* Expanded Full Audit Timeline Row */}
+                          {isExpanded && (
+                            <tr className="bg-[#0b0e1e]/90 border-b border-brand-border/30 animate-fade-in">
+                              <td colSpan={9} className="p-4 md:p-6">
+                                <div className="space-y-4">
+                                  <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                                    <div className="flex items-center gap-2">
+                                      <History size={16} className="text-amber-400" />
+                                      <h4 className="text-sm font-bold text-white">
+                                        سجل التدقيق والتعديلات بالكامل ({history.length} تعديل)
+                                      </h4>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEditModal(req)}
+                                      className="px-3 py-1.5 rounded-xl bg-brand-accent hover:bg-brand-accent/90 text-white font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-[0_0_12px_rgba(139,92,246,0.3)]"
+                                    >
+                                      <Edit3 size={13} />
+                                      <span>تعديل هذا الطلب الآن</span>
+                                    </button>
+                                  </div>
+
+                                  <div className="space-y-3">
+                                    {history.map((record: FundRequestEditRecord, idx: number) => {
+                                      const isLatest = idx === 0;
+                                      return (
+                                        <div
+                                          key={record.id || idx}
+                                          className={`p-4 rounded-xl border transition-all ${
+                                            isLatest
+                                              ? "bg-[#0e142a] border-amber-500/40 shadow-md"
+                                              : "bg-[#080a14] border-brand-border/30"
+                                          }`}
+                                        >
+                                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2.5 mb-2.5">
+                                            <div className="flex items-center gap-2">
+                                              <span
+                                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                                  isLatest
+                                                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                                                    : "bg-white/10 text-white/60 border border-white/15"
+                                                }`}
+                                              >
+                                                {isLatest ? "التعديل الأحدث" : `تعديل سابق (#${history.length - idx})`}
+                                              </span>
+                                              <span className="text-xs font-bold text-white flex items-center gap-1">
+                                                <span>بواسطة:</span>
+                                                <span className="text-brand-accent">{record.editor_name}</span>
+                                                <span className="text-[9.5px] px-1.5 py-0.5 rounded bg-white/5 text-brand-dim border border-white/10">
+                                                  {record.editor_role === "admin" ? "مدير النظام" : "المحاسب"}
+                                                </span>
+                                              </span>
+                                            </div>
+                                            <div className="text-[11px] font-mono text-brand-dim/80 flex items-center gap-1.5">
+                                              <Clock size={12} />
+                                              <span>{formatDateTime(record.edited_at)}</span>
+                                            </div>
+                                          </div>
+
+                                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                                            {/* Amount change */}
+                                            <div className="bg-[#05060f]/60 p-2.5 rounded-lg border border-brand-border/20 space-y-1">
+                                              <span className="text-[10px] text-brand-dim block font-bold">
+                                                المبلغ المعتمد:
+                                              </span>
+                                              <div className="flex items-center gap-2 font-inter">
+                                                <span className="line-through text-red-400 font-bold">
+                                                  {record.old_amount.toLocaleString("en-US")}
+                                                </span>
+                                                <span className="text-white/40">←</span>
+                                                <span className="text-emerald-400 font-bold">
+                                                  {record.new_amount.toLocaleString("en-US")} ج.م
+                                                </span>
+                                              </div>
+                                              <span className="text-[10px] text-brand-dim/70 block">
+                                                الفرق:{" "}
+                                                {record.difference > 0
+                                                  ? `+${record.difference.toLocaleString("en-US")}`
+                                                  : record.difference.toLocaleString("en-US")}{" "}
+                                                ج.م
+                                              </span>
+                                            </div>
+
+                                            {/* Date change */}
+                                            <div className="bg-[#05060f]/60 p-2.5 rounded-lg border border-brand-border/20 space-y-1">
+                                              <span className="text-[10px] text-brand-dim block font-bold">
+                                                تاريخ المعاملة:
+                                              </span>
+                                              <div className="flex items-center gap-2 font-inter text-xs">
+                                                {record.old_date !== record.new_date ? (
+                                                  <>
+                                                    <span className="line-through text-white/50">
+                                                      {record.old_date}
+                                                    </span>
+                                                    <span className="text-white/40">←</span>
+                                                    <span className="text-brand-accent font-bold">
+                                                      {record.new_date}
+                                                    </span>
+                                                  </>
+                                                ) : (
+                                                  <span className="text-white font-medium">
+                                                    {record.new_date} (لم يتغير)
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </div>
+
+                                            {/* Notes */}
+                                            <div className="bg-[#05060f]/60 p-2.5 rounded-lg border border-brand-border/20 space-y-1 md:col-span-1">
+                                              <span className="text-[10px] text-brand-dim block font-bold flex items-center gap-1">
+                                                <MessageSquare size={11} className="text-brand-accent" />
+                                                <span>ملاحظات وتفاصيل التعديل:</span>
+                                              </span>
+                                              <p className="text-white text-xs leading-relaxed font-cairo bg-white/[0.02] p-1.5 rounded border border-white/5">
+                                                {record.notes}
+                                              </p>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
@@ -1901,6 +2847,236 @@ export default function HistoryClient({
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Edit Fund Request Modal Dialog */}
+      {editingFundRequest && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[#05060f]/85 backdrop-blur-md p-4 animate-fade-in text-right">
+          <div className="w-full max-w-lg bg-brand-card border border-brand-border rounded-[24px] shadow-2xl p-6 md:p-8 space-y-5 relative animate-scale-in max-h-[90vh] overflow-y-auto custom-scrollbar">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-brand-border/20 pb-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Edit3 size={20} className="text-brand-accent" />
+                <span>تعديل طلب شحن الرصيد المعتمد</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => !isSubmittingEdit && setEditingFundRequest(null)}
+                disabled={isSubmittingEdit}
+                className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-white/50 hover:text-white flex items-center justify-center transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Error Message */}
+            {editModalError && (
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/25 text-red-400 text-xs flex items-center gap-2 animate-fade-in font-cairo">
+                <AlertCircle size={15} className="shrink-0" />
+                <span>{editModalError}</span>
+              </div>
+            )}
+
+            {/* Request Summary Info */}
+            <div className="bg-[#070814]/70 border border-brand-border/40 rounded-xl p-4 space-y-2 text-xs">
+              <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                <span className="text-brand-dim">الموظف:</span>
+                <span className="font-bold text-white">{editingFundRequest.agent?.full_name || "-"}</span>
+              </div>
+              <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                <span className="text-brand-dim">المبلغ المطلوب الأصلي:</span>
+                <span className="font-bold font-inter text-brand-accent">
+                  {Number(editingFundRequest.amount_requested).toLocaleString("en-US")} ج.م
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-brand-dim">المبلغ المعتمد الحالي:</span>
+                <span className="font-bold font-inter text-emerald-400">
+                  {Number(editingFundRequest.amount_approved || editingFundRequest.amount_requested).toLocaleString("en-US")} ج.م
+                </span>
+              </div>
+            </div>
+
+            {/* Multi-Wallet inputs if multi-wallet */}
+            {editingFundRequest.is_multi_wallet && Array.isArray(editingFundRequest.multi_wallet_data) && (
+              <div className="space-y-3 p-4 bg-[#070814]/40 border border-brand-border/45 rounded-xl">
+                <label className="text-xs font-bold text-white mb-1 font-cairo block">
+                  المبلغ المعتمد الجديد لكل محفظة:
+                </label>
+                <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                  {extractFundRequestWallets(editingFundRequest).map((item: any, idx: number) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between gap-3 text-xs bg-[#070814]/60 p-2.5 rounded-lg border border-brand-border/20"
+                    >
+                      <div className="text-right font-mono font-bold text-white">
+                        <span>{item.phone_number}</span>
+                        {item.esim_number && (
+                          <span className="text-[10px] text-brand-dim block font-cairo">({item.esim_number})</span>
+                        )}
+                      </div>
+                      <div className="relative w-36">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          disabled={isSubmittingEdit}
+                          value={editMultiAmounts[item.wallet_id] ?? ""}
+                          onChange={(e) => {
+                            const newAmounts: Record<string, string> = { ...editMultiAmounts, [item.wallet_id]: e.target.value };
+                            setEditMultiAmounts(newAmounts);
+                            let total = 0;
+                            extractFundRequestWallets(editingFundRequest).forEach((w: any) => {
+                              const val = parseFloat(w.wallet_id === item.wallet_id ? e.target.value : (newAmounts[w.wallet_id] || "0"));
+                              if (!isNaN(val)) total += val;
+                            });
+                            setEditAmount(String(total));
+                          }}
+                          className="w-full bg-[#05060f] border border-brand-border/80 rounded-lg pl-3 pr-8 py-2 text-xs text-white focus:outline-none focus:border-brand-accent text-left dir-ltr font-inter"
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 font-bold text-[10px] font-inter">
+                          ج.م
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Total / Single Amount Input */}
+            <div className="space-y-2 text-right">
+              <label className="block text-[13px] font-medium text-brand-dim font-cairo">
+                {editingFundRequest.is_multi_wallet ? "إجمالي المبلغ المعتمد الجديد (ج.م)" : "المبلغ المعتمد الجديد (ج.م)"}
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  disabled={isSubmittingEdit || editingFundRequest.is_multi_wallet}
+                  value={editAmount}
+                  onChange={(e) => setEditAmount(e.target.value)}
+                  className={`w-full bg-[#070814]/80 border rounded-xl pl-4 pr-11 py-3 text-sm text-white focus:outline-none transition-all text-left dir-ltr font-inter ${
+                    editingFundRequest.is_multi_wallet ? "opacity-75 cursor-not-allowed border-brand-border/40" : "border-brand-border/80 focus:border-brand-accent"
+                  }`}
+                  placeholder="أدخل المبلغ الجديد..."
+                />
+                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 font-bold text-xs">
+                  ج.م
+                </span>
+              </div>
+            </div>
+
+            {/* Transaction Date Input */}
+            <div className="space-y-2 text-right">
+              <label className="block text-[13px] font-medium text-brand-dim font-cairo">
+                تاريخ التحويل / الاعتماد
+              </label>
+              <div className="relative">
+                <input
+                  type="date"
+                  disabled={isSubmittingEdit}
+                  value={editDate}
+                  onChange={(e) => setEditDate(e.target.value)}
+                  onClick={(e) => e.currentTarget.showPicker?.()}
+                  className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3 text-sm text-white focus:outline-none focus:border-brand-accent transition-all text-left dir-ltr font-inter cursor-pointer"
+                />
+                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none">
+                  <Calendar size={16} />
+                </span>
+              </div>
+            </div>
+
+            {/* Notes / Reason Textarea (MANDATORY) */}
+            <div className="space-y-2 text-right">
+              <div className="flex items-center justify-between">
+                <label className="text-[13px] font-medium text-brand-dim font-cairo flex items-center gap-1.5">
+                  <MessageSquare size={14} className="text-amber-400" />
+                  <span>ملاحظات وسبب التعديل</span>
+                  <span className="text-red-400 font-bold">*</span>
+                </label>
+                <span className="text-[10px] text-amber-400/90 font-semibold font-cairo">
+                  مطلوب لحفظ سجل التدقيق
+                </span>
+              </div>
+              <textarea
+                rows={3}
+                required
+                disabled={isSubmittingEdit}
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                placeholder="اكتب سبب التعديل بالتفصيل (مثال: تم تحويل 30 ألف فقط لعدم توفر رصيد كافي بالمحفظة وقت التحويل)..."
+                className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-brand-accent transition-all font-cairo resize-none leading-relaxed placeholder-brand-dim/40"
+              />
+            </div>
+
+            {/* Live Difference Impact Preview */}
+            {(() => {
+              const currentVal = Number(editingFundRequest.amount_approved) || Number(editingFundRequest.amount_requested) || 0;
+              const newVal = parseFloat(editAmount || "0");
+              const diff = newVal - currentVal;
+
+              if (isNaN(newVal) || newVal <= 0) return null;
+
+              return (
+                <div className={`p-3 rounded-xl border text-xs font-cairo flex items-start gap-2.5 transition-all ${
+                  diff < 0
+                    ? "bg-amber-500/10 border-amber-500/30 text-amber-300"
+                    : diff > 0
+                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                    : "bg-white/5 border-white/10 text-brand-dim"
+                }`}>
+                  <div className="mt-0.5 shrink-0">
+                    {diff < 0 ? <ArrowDownRight size={16} /> : diff > 0 ? <ArrowUpRight size={16} /> : <Info size={16} />}
+                  </div>
+                  <div className="space-y-0.5">
+                    <p className="font-bold">
+                      {diff < 0
+                        ? `سيتم تخفيض المبلغ بمقدار ${Math.abs(diff).toLocaleString("en-US")} ج.م`
+                        : diff > 0
+                        ? `سيتم زيادة المبلغ بمقدار ${diff.toLocaleString("en-US")} ج.م`
+                        : "المبلغ لم يتغير، سيتم تحديث التاريخ والملاحظات فقط"}
+                    </p>
+                    <p className="text-[11px] opacity-80">
+                      سيتم تسجيل اسمك وتوقيت هذا الإجراء وحفظ الملاحظات في سجل التدقيق التاريخي للطلب.
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Modal Actions */}
+            <div className="flex items-center gap-3 pt-4 border-t border-brand-border/20">
+              <button
+                type="button"
+                onClick={handleSaveEdit}
+                disabled={isSubmittingEdit || !editNotes.trim() || !editAmount || parseFloat(editAmount) <= 0}
+                className="flex-1 flex items-center justify-center gap-1.5 px-4.5 py-3 bg-brand-accent hover:bg-brand-accent/90 disabled:bg-brand-accent/30 disabled:text-white/40 text-white font-bold rounded-xl transition-all cursor-pointer text-xs active:scale-[0.98] disabled:scale-100 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(139,92,246,0.3)] disabled:shadow-none"
+              >
+                {isSubmittingEdit ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>جاري حفظ التعديل...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check size={14} />
+                    <span>حفظ وتطبيق التعديل</span>
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => !isSubmittingEdit && setEditingFundRequest(null)}
+                disabled={isSubmittingEdit}
+                className="px-6 py-3 bg-[#070814]/40 hover:bg-white/5 border border-brand-border/40 text-brand-dim hover:text-white rounded-xl transition-colors cursor-pointer text-xs"
+              >
+                إلغاء
+              </button>
+            </div>
           </div>
         </div>
       )}

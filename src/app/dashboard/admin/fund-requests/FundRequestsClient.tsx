@@ -16,6 +16,7 @@ import {
   Loader2,
   Wallet,
   Copy,
+  AlertCircle,
 } from "lucide-react";
 import {
   AdminFundRequest,
@@ -57,19 +58,9 @@ export default function FundRequestsClient({
   const [expandedRequests, setExpandedRequests] = useState<Record<string, boolean>>({});
 
   // Modals state
-  const getTodayCairo = () => {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Africa/Cairo",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date()).split("-");
-    return `${parts[0]}-${parts[1]}-${parts[2]}`;
-  };
-
   const [activeModalRequest, setActiveModalRequest] = useState<AdminFundRequest | null>(null);
   const [approvedAmount, setApprovedAmount] = useState<string>("");
-  const [approvalDate, setApprovalDate] = useState<string>(getTodayCairo());
+  const [approvalDate, setApprovalDate] = useState<string>("");
   const [multiApprovedAmounts, setMultiApprovedAmounts] = useState<Record<string, string>>({});
   const [activeRejectRequest, setActiveRejectRequest] = useState<AdminFundRequest | null>(null);
 
@@ -202,7 +193,7 @@ export default function FundRequestsClient({
   // 2. Action Handlers
   const handleOpenApproveModal = (req: AdminFundRequest) => {
     setActiveModalRequest(req);
-    setApprovalDate(getTodayCairo());
+    setApprovalDate("");
     if (req.is_multi_wallet) {
       setApprovedAmount(String(req.amount_requested));
       const initialAmounts: Record<string, string> = {};
@@ -222,6 +213,11 @@ export default function FundRequestsClient({
 
   const handleConfirmApproval = () => {
     if (!activeModalRequest) return;
+
+    if (!approvalDate || !approvalDate.trim()) {
+      showToast("يرجى تحديد تاريخ التحويل / الاعتماد أولاً.", "error");
+      return;
+    }
 
     if (activeModalRequest.is_multi_wallet) {
       if (!activeModalRequest.multi_wallet_data || !Array.isArray(activeModalRequest.multi_wallet_data)) {
@@ -257,6 +253,7 @@ export default function FundRequestsClient({
           showToast("تم اعتماد طلب شحن الرصيد بنجاح.", "success");
           setRequests((prev) => prev.filter((r) => r.id !== activeModalRequest.id));
           setActiveModalRequest(null);
+          setApprovalDate("");
           router.refresh();
         } else {
           showToast(res.error || "فشل اعتماد الطلب.", "error");
@@ -275,6 +272,7 @@ export default function FundRequestsClient({
           showToast("تم اعتماد طلب شحن الرصيد بنجاح.", "success");
           setRequests((prev) => prev.filter((r) => r.id !== activeModalRequest.id));
           setActiveModalRequest(null);
+          setApprovalDate("");
           router.refresh();
         } else {
           showToast(res.error || "فشل اعتماد الطلب.", "error");
@@ -798,7 +796,12 @@ export default function FundRequestsClient({
               </h3>
               <button
                 type="button"
-                onClick={() => !isPending && setActiveModalRequest(null)}
+                onClick={() => {
+                  if (!isPending) {
+                    setActiveModalRequest(null);
+                    setApprovalDate("");
+                  }
+                }}
                 disabled={isPending}
                 className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 text-white/50 hover:text-white flex items-center justify-center transition-colors cursor-pointer disabled:opacity-50"
               >
@@ -944,25 +947,57 @@ export default function FundRequestsClient({
 
               {/* Approval / Transfer Date Picker */}
               <div className="space-y-2 text-right">
-                <label className="block text-[13px] font-medium text-brand-dim font-cairo">
-                  تاريخ التحويل / الاعتماد
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[13px] font-medium text-brand-dim font-cairo flex items-center gap-1.5">
+                    <span>تاريخ التحويل / الاعتماد</span>
+                    <span className="text-red-400 font-bold">*</span>
+                  </label>
+                  <span
+                    className={`text-[10px] px-2 py-0.5 rounded-md font-semibold transition-all ${
+                      approvalDate
+                        ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                        : "bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse"
+                    }`}
+                  >
+                    {approvalDate ? "تم تحديد التاريخ" : "مطلوب اختيار التاريخ"}
+                  </span>
+                </div>
                 <div className="relative">
                   <input
                     type="date"
+                    required
                     disabled={isPending}
                     value={approvalDate}
                     onChange={(e) => setApprovalDate(e.target.value)}
                     onClick={(e) => e.currentTarget.showPicker?.()}
-                    className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3 text-sm text-white focus:outline-none focus:border-brand-accent transition-all text-left dir-ltr font-inter cursor-pointer"
+                    className={`w-full bg-[#070814]/80 border rounded-xl pl-4 pr-11 py-3 text-sm text-white focus:outline-none transition-all text-left dir-ltr font-inter cursor-pointer ${
+                      !approvalDate
+                        ? "border-amber-500/60 hover:border-amber-400 focus:border-amber-400 focus:ring-1 focus:ring-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.1)]"
+                        : "border-emerald-500/40 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30"
+                    }`}
                   />
-                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none">
+                  <span
+                    className={`absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none transition-colors ${
+                      approvalDate ? "text-emerald-400" : "text-amber-400"
+                    }`}
+                  >
                     <Calendar size={16} />
                   </span>
                 </div>
-                <p className="text-[10px] text-brand-dim/70 font-cairo">
-                  * تم ضبطه تلقائياً على تاريخ اليوم، ويمكنك تعديله في حال تم التحويل في يوم آخر لحفظه بدقة.
-                </p>
+                {!approvalDate ? (
+                  <p className="text-[11px] text-amber-400/95 font-medium font-cairo flex items-center gap-1.5">
+                    <AlertCircle size={13} className="shrink-0 text-amber-400" />
+                    <span>يجب اختيار تاريخ التحويل لتتمكن من تأكيد واعتماد الطلب.</span>
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-brand-dim/80 font-cairo flex items-center gap-1.5">
+                    <Check size={13} className="shrink-0 text-emerald-400" />
+                    <span>
+                      سيتم حفظ التحويل وسجله المحاسبي بتاريخ{" "}
+                      <span className="font-inter font-bold text-white dir-ltr">{approvalDate}</span>
+                    </span>
+                  </p>
+                )}
               </div>
 
               {/* Approved Amount Display / Input */}
@@ -1010,8 +1045,9 @@ export default function FundRequestsClient({
               <button
                 type="button"
                 onClick={handleConfirmApproval}
-                disabled={isPending}
-                className="flex-1 flex items-center justify-center gap-1.5 px-4.5 py-3 bg-brand-accent hover:bg-brand-accent/90 disabled:bg-brand-accent/50 text-white font-bold rounded-xl transition-all cursor-pointer text-xs active:scale-[0.98] disabled:scale-100 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(139,92,246,0.3)]"
+                disabled={isPending || !approvalDate}
+                title={!approvalDate ? "يرجى اختيار تاريخ التحويل أولاً للمتابعة" : "تأكيد واعتماد"}
+                className="flex-1 flex items-center justify-center gap-1.5 px-4.5 py-3 bg-brand-accent hover:bg-brand-accent/90 disabled:bg-brand-accent/30 disabled:text-white/40 text-white font-bold rounded-xl transition-all cursor-pointer text-xs active:scale-[0.98] disabled:scale-100 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(139,92,246,0.3)] disabled:shadow-none"
               >
                 {isPending ? (
                   <>
@@ -1027,7 +1063,12 @@ export default function FundRequestsClient({
               </button>
               <button
                 type="button"
-                onClick={() => !isPending && setActiveModalRequest(null)}
+                onClick={() => {
+                  if (!isPending) {
+                    setActiveModalRequest(null);
+                    setApprovalDate("");
+                  }
+                }}
                 disabled={isPending}
                 className="px-6 py-3 bg-[#070814]/40 hover:bg-white/5 border border-brand-border/40 text-brand-dim hover:text-white rounded-xl transition-colors cursor-pointer text-xs"
               >
