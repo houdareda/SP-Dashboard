@@ -28,6 +28,7 @@ import {
   Search,
   Filter,
   Info,
+  Copy,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import {
@@ -45,6 +46,8 @@ import {
   FundRequestEditRecord,
   extractFundRequestEditHistory,
   extractFundRequestWallets,
+  formatFundRequestTransferText,
+  copyToClipboard,
 } from "@/lib/fundUtils";
 import { getExpenseTransfers } from "@/app/actions/operations";
 import { MarketingSystem } from "@/app/actions/marketingSystems";
@@ -112,6 +115,26 @@ export default function HistoryClient({
   const [editModalError, setEditModalError] = useState<string | null>(null);
   const [expandedEditHistoryIds, setExpandedEditHistoryIds] = useState<Record<string, boolean>>({});
   const [editsSearchTerm, setEditsSearchTerm] = useState<string>("");
+  const [copiedTransferId, setCopiedTransferId] = useState<string | null>(null);
+
+  const handleCopyTransferDetails = async (
+    e: React.MouseEvent,
+    req: any,
+    specificWallet?: { phone_number?: string; amount?: number | string }
+  ) => {
+    e.stopPropagation();
+    const textToCopy = formatFundRequestTransferText(req, specificWallet);
+    if (!textToCopy) return;
+
+    const success = await copyToClipboard(textToCopy);
+    if (!success) return;
+
+    const copyKey = specificWallet?.phone_number ? `${req.id}-${specificWallet.phone_number}` : req.id;
+    setCopiedTransferId(copyKey);
+    setTimeout(() => {
+      setCopiedTransferId((prev) => (prev === copyKey ? null : prev));
+    }, 2500);
+  };
 
   const toggleExpandHistory = (id: string) => {
     setExpandedEditHistoryIds((prev) => ({
@@ -1699,8 +1722,9 @@ export default function HistoryClient({
             {fundRequests.length === 0 ? (
               renderEmptyState("لم يتم العثور على أي طلبات أموال مطابقة للفلاتر.", Coins)
             ) : (
-              <div className="overflow-x-auto custom-scrollbar">
-                <table className="w-full text-right border-collapse min-w-[900px]">
+              <div className="space-y-4">
+                <div className="hidden md:block overflow-x-auto custom-scrollbar">
+                  <table className="w-full text-right border-collapse min-w-[900px]">
                   <thead>
                     <tr className="border-b border-brand-border/40 text-brand-dim/70 text-xs font-bold">
                       <th className="pb-3.5 pr-2 font-bold">الموظف</th>
@@ -1725,23 +1749,47 @@ export default function HistoryClient({
                         <React.Fragment key={req.id}>
                           <tr className="border-b border-brand-border/20 text-xs text-white/80 hover:bg-white/[0.02] transition-colors">
                             <td className="py-4 pr-2 font-bold text-brand-accent capitalize">
-                              <div className="flex items-center gap-1.5">
-                                {history.length > 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleExpandHistory(req.id)}
-                                    className="cursor-pointer text-amber-400 hover:text-amber-300 transition-colors"
-                                    title="يوجد تعديلات على هذا الطلب"
-                                  >
-                                    <ChevronDown
-                                      size={14}
-                                      className={`transition-transform duration-200 ${
-                                        isHistoryExpanded ? "rotate-180" : ""
-                                      }`}
-                                    />
-                                  </button>
-                                )}
-                                <span>{req.agent?.full_name || "-"}</span>
+                              <div className="flex flex-col items-start gap-1">
+                                <div className="flex items-center gap-1.5">
+                                  {history.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleExpandHistory(req.id)}
+                                      className="cursor-pointer text-amber-400 hover:text-amber-300 transition-colors"
+                                      title="يوجد تعديلات على هذا الطلب"
+                                    >
+                                      <ChevronDown
+                                        size={14}
+                                        className={`transition-transform duration-200 ${
+                                          isHistoryExpanded ? "rotate-180" : ""
+                                        }`}
+                                      />
+                                    </button>
+                                  )}
+                                  <span>{req.agent?.full_name || "-"}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleCopyTransferDetails(e, req)}
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border transition-all cursor-pointer active:scale-95 ${
+                                    copiedTransferId === req.id
+                                      ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.2)]"
+                                      : "bg-brand-accent/10 hover:bg-brand-accent/20 border-brand-accent/25 text-brand-accent hover:text-white"
+                                  }`}
+                                  title="نسخ بيانات التحويل: الاسم ورقم المحفظة والمبلغ المطلوب"
+                                >
+                                  {copiedTransferId === req.id ? (
+                                    <>
+                                      <Check size={10} className="stroke-[2.5]" />
+                                      <span>تم النسخ ✓</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy size={10} />
+                                      <span>نسخ للتحويل</span>
+                                    </>
+                                  )}
+                                </button>
                               </div>
                             </td>
                             <td className="py-4 font-medium font-inter">
@@ -1749,16 +1797,35 @@ export default function HistoryClient({
                             </td>
                             <td className="py-4 font-mono font-bold text-white/90">
                               {req.is_multi_wallet ? (
-                                <div className="space-y-0.5 text-right font-cairo">
-                                  <span className="inline-block px-1.5 py-0.5 text-[8.5px] font-extrabold bg-brand-accent/20 text-brand-accent border border-brand-accent/30 rounded-md mb-1">
+                                <div className="space-y-1 text-right font-cairo">
+                                  <span className="inline-block px-1.5 py-0.5 text-[8.5px] font-extrabold bg-brand-accent/20 text-brand-accent border border-brand-accent/30 rounded-md mb-0.5">
                                     متعدد المحافظ
                                   </span>
                                   {wallets.length > 0 ? (
-                                    wallets.map((item: any, idx: number) => (
-                                      <div key={idx} className="text-[10px] font-semibold text-white/80">
-                                        {item.phone_number} {item.esim_number ? `(${item.esim_number})` : ""}
-                                      </div>
-                                    ))
+                                    wallets.map((item: any, idx: number) => {
+                                      const subKey = `${req.id}-${item.phone_number}`;
+                                      const isSubCopied = copiedTransferId === subKey;
+                                      return (
+                                        <div key={idx} className="flex items-center justify-between gap-1.5 text-[10px] font-semibold text-white/80 bg-white/[0.02] p-1 rounded">
+                                          <span>{item.phone_number} {item.esim_number ? `(${item.esim_number})` : ""}</span>
+                                          {item.phone_number && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => handleCopyTransferDetails(e, req, { phone_number: item.phone_number, amount: item.amount_requested || item.amount })}
+                                              className={`px-1 py-0.5 rounded border text-[9px] font-bold transition-all cursor-pointer flex items-center gap-0.5 ${
+                                                isSubCopied
+                                                  ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                                                  : "bg-white/5 hover:bg-white/10 border-white/10 text-white/60 hover:text-white"
+                                              }`}
+                                              title="نسخ بيانات هذا الرقم والمبلغ"
+                                            >
+                                              {isSubCopied ? <Check size={8} className="stroke-[2.5]" /> : <Copy size={8} />}
+                                              <span>{isSubCopied ? "تم" : "نسخ"}</span>
+                                            </button>
+                                          )}
+                                        </div>
+                                      );
+                                    })
                                   ) : (
                                     <span>{req.wallet?.phone_number || "-"}</span>
                                   )}
@@ -1831,6 +1898,19 @@ export default function HistoryClient({
                             {(userRole === "admin" || userRole === "accountant") && (
                               <td className="py-4 pl-2 text-center" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleCopyTransferDetails(e, req)}
+                                    className={`px-2 py-1.5 rounded-lg border text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer active:scale-95 shadow-sm ${
+                                      copiedTransferId === req.id
+                                        ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                                        : "bg-white/5 hover:bg-white/10 border-white/15 text-white/80 hover:text-white"
+                                    }`}
+                                    title="نسخ بيانات التحويل (الاسم + المحفظة + المبلغ)"
+                                  >
+                                    {copiedTransferId === req.id ? <Check size={11} className="stroke-[2.5]" /> : <Copy size={11} />}
+                                    <span>{copiedTransferId === req.id ? "تم النسخ" : "نسخ"}</span>
+                                  </button>
                                   {req.status === "approved" && (
                                     <button
                                       type="button"
@@ -1983,8 +2063,181 @@ export default function HistoryClient({
                     })}
                   </tbody>
                 </table>
-                {renderPaginationControls(fundPage, fundCount, Math.ceil(fundCount / 20), setFundPage)}
               </div>
+
+              {/* Mobile Cards for Fund Requests (md:hidden) */}
+              <div className="block md:hidden space-y-3.5">
+                {fundRequests.map((req) => {
+                  const isTransferCopied = copiedTransferId === req.id;
+                  const history = extractFundRequestEditHistory(req.multi_wallet_data);
+                  const isHistoryExpanded = Boolean(expandedEditHistoryIds[req.id]);
+                  const wallets = extractFundRequestWallets(req);
+
+                  return (
+                    <div
+                      key={req.id}
+                      className="bg-[#090b17]/95 border border-brand-border/60 rounded-2xl p-4 space-y-3 shadow-lg relative overflow-hidden backdrop-blur-md"
+                    >
+                      {/* Top: Employee & Status */}
+                      <div className="flex items-center justify-between gap-3 border-b border-brand-border/20 pb-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-full bg-brand-accent/15 border border-brand-accent/30 flex items-center justify-center text-brand-accent shrink-0">
+                            <User size={15} />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-white text-sm capitalize">{req.agent?.full_name || "موظف"}</h4>
+                            <span className="text-[11px] text-brand-dim font-inter">{formatDate(req.request_date)}</span>
+                          </div>
+                        </div>
+                        <div>
+                          {renderStatusBadge(req.status, req.reviewer?.full_name, req.approved_at)}
+                        </div>
+                      </div>
+
+                      {/* Amounts & Wallet Grid */}
+                      <div className="grid grid-cols-2 gap-2 bg-[#050711]/60 p-3 rounded-xl border border-brand-border/30">
+                        <div>
+                          <span className="text-[10.5px] text-brand-dim block font-medium">المبلغ المطلوب:</span>
+                          <span className="font-bold font-inter text-white text-sm">
+                            {Number(req.amount_requested).toLocaleString("en-US")} ج.م
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10.5px] text-brand-dim block font-medium">المبلغ المعتمد:</span>
+                          {req.status === "approved" ? (
+                            <span className="font-bold font-inter text-brand-accent text-sm">
+                              {Number(req.amount_approved).toLocaleString("en-US")} ج.م
+                            </span>
+                          ) : (
+                            <span className="text-xs text-brand-dim/40">—</span>
+                          )}
+                        </div>
+                        <div className="col-span-2 pt-1 border-t border-brand-border/10 flex items-center justify-between">
+                          <span className="text-[10.5px] text-brand-dim font-medium">محفظة الاستلام:</span>
+                          <span className="font-mono font-bold text-xs text-white dir-ltr">
+                            {req.wallet?.phone_number || (req.is_multi_wallet ? "متعدد المحافظ" : "-")}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Multi-wallet breakdown */}
+                      {req.is_multi_wallet && wallets.length > 0 && (
+                        <div className="space-y-1.5 bg-[#050711]/40 p-2.5 rounded-xl border border-brand-border/20 text-xs">
+                          <span className="text-[10px] text-brand-dim block font-bold mb-1">تفاصيل المحافظ والمبالغ:</span>
+                          {wallets.map((item: any, idx: number) => {
+                            const subKey = `${req.id}-${item.phone_number}`;
+                            const isSubCopied = copiedTransferId === subKey;
+                            return (
+                              <div key={idx} className="flex items-center justify-between bg-white/[0.02] p-2 rounded-lg border border-white/5">
+                                <div className="font-mono text-white text-[11px]">
+                                  <span>{item.phone_number}</span>
+                                  {item.esim_number && <span className="text-[9.5px] text-brand-dim block font-cairo">({item.esim_number})</span>}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-inter font-bold text-brand-accent text-xs">
+                                    {Number(item.amount_requested || item.amount || 0).toLocaleString("en-US")} ج.م
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleCopyTransferDetails(e, req, { phone_number: item.phone_number, amount: item.amount_requested || item.amount })}
+                                    className={`px-2 py-1 rounded-md border text-[10px] font-bold flex items-center gap-1 transition-all ${
+                                      isSubCopied
+                                        ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                                        : "bg-brand-accent/15 border-brand-accent/30 text-brand-accent"
+                                    }`}
+                                    title="نسخ بيانات هذه المحفظة فقط"
+                                  >
+                                    {isSubCopied ? <Check size={11} className="stroke-[2.5]" /> : <Copy size={11} />}
+                                    <span>{isSubCopied ? "تم" : "نسخ للتحويل"}</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* PROMINENT MOBILE COPY BUTTON */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleCopyTransferDetails(e, req)}
+                        className={`w-full py-2.5 px-3.5 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold transition-all shadow-sm active:scale-[0.98] cursor-pointer ${
+                          isTransferCopied
+                            ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.25)]"
+                            : "bg-gradient-to-r from-brand-accent/25 via-brand-accent/15 to-brand-accent/25 hover:bg-brand-accent/35 border-brand-accent/40 text-white shadow-[0_0_12px_rgba(139,92,246,0.18)]"
+                        }`}
+                      >
+                        {isTransferCopied ? (
+                          <>
+                            <Check size={15} className="text-emerald-400 stroke-[2.5]" />
+                            <span className="font-cairo">تم نسخ بيانات التحويل بالكامل ✓</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={14} className="text-brand-accent" />
+                            <span className="font-cairo">نسخ بيانات التحويل (الاسم + المحفظة + المبلغ)</span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* Actions Row */}
+                      {(userRole === "admin" || userRole === "accountant") && (
+                        <div className="flex items-center gap-2 pt-1 border-t border-brand-border/15">
+                          {req.status === "approved" && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditModal(req)}
+                              className="flex-1 py-2 rounded-xl bg-brand-accent/15 hover:bg-brand-accent/25 border border-brand-accent/30 text-brand-accent font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-sm"
+                            >
+                              <Edit3 size={13} />
+                              <span>تعديل المبلغ أو الملاحظات</span>
+                            </button>
+                          )}
+                          {history.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => toggleExpandHistory(req.id)}
+                              className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                                isHistoryExpanded
+                                  ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
+                                  : "bg-white/5 hover:bg-white/10 border-white/10 text-brand-dim"
+                              }`}
+                            >
+                              <History size={13} className="text-amber-400" />
+                              <span>سجل التعديلات ({history.length})</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Expanded Audit Card on Mobile */}
+                      {isHistoryExpanded && history.length > 0 && (
+                        <div className="space-y-2 pt-2 border-t border-brand-border/20 text-xs">
+                          <span className="text-[11px] font-bold text-amber-400 block font-cairo">سجل التعديلات السابقة:</span>
+                          {history.map((record: FundRequestEditRecord, idx: number) => (
+                            <div key={record.id || idx} className="bg-[#050711] p-2.5 rounded-lg border border-brand-border/20 space-y-1">
+                              <div className="flex justify-between text-[10px] text-brand-dim">
+                                <span>بواسطة: <strong className="text-white">{record.editor_name}</strong></span>
+                                <span>{formatDateTime(record.edited_at)}</span>
+                              </div>
+                              <div className="flex justify-between font-inter text-xs">
+                                <span>من: {record.old_amount.toLocaleString("en-US")} ج.م</span>
+                                <span className="text-emerald-400 font-bold">إلى: {record.new_amount.toLocaleString("en-US")} ج.م</span>
+                              </div>
+                              {record.notes && (
+                                <p className="text-[10px] text-brand-dim italic">"{record.notes}"</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {renderPaginationControls(fundPage, fundCount, Math.ceil(fundCount / 20), setFundPage)}
+            </div>
             )}
           </div>
         )}
@@ -2131,14 +2384,41 @@ export default function HistoryClient({
                             }`}
                           >
                             <td className="py-4 pr-2 font-bold text-brand-accent capitalize">
-                              <div className="flex items-center gap-2">
-                                <ChevronDown
-                                  size={14}
-                                  className={`text-brand-dim transition-transform duration-200 ${
-                                    isExpanded ? "rotate-180 text-brand-accent" : ""
+                              <div className="flex flex-col items-start gap-1">
+                                <div className="flex items-center gap-2">
+                                  <ChevronDown
+                                    size={14}
+                                    className={`text-brand-dim transition-transform duration-200 ${
+                                      isExpanded ? "rotate-180 text-brand-accent" : ""
+                                    }`}
+                                  />
+                                  <span>{req.agent?.full_name || "-"}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCopyTransferDetails(e, req);
+                                  }}
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border transition-all cursor-pointer active:scale-95 ${
+                                    copiedTransferId === req.id
+                                      ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.2)]"
+                                      : "bg-brand-accent/10 hover:bg-brand-accent/20 border-brand-accent/25 text-brand-accent hover:text-white"
                                   }`}
-                                />
-                                <span>{req.agent?.full_name || "-"}</span>
+                                  title="نسخ بيانات التحويل: الاسم ورقم المحفظة والمبلغ"
+                                >
+                                  {copiedTransferId === req.id ? (
+                                    <>
+                                      <Check size={10} className="stroke-[2.5]" />
+                                      <span>تم النسخ ✓</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy size={10} />
+                                      <span>نسخ للتحويل</span>
+                                    </>
+                                  )}
+                                </button>
                               </div>
                             </td>
                             <td className="py-4 font-medium font-inter">
@@ -2204,6 +2484,19 @@ export default function HistoryClient({
                             </td>
                             <td className="py-4 pl-2 text-center" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center justify-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleCopyTransferDetails(e, req)}
+                                  className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer active:scale-95 shadow-sm ${
+                                    copiedTransferId === req.id
+                                      ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                                      : "bg-white/5 hover:bg-white/10 border-white/15 text-white/80 hover:text-white"
+                                  }`}
+                                  title="نسخ بيانات التحويل (الاسم + المحفظة + المبلغ)"
+                                >
+                                  {copiedTransferId === req.id ? <Check size={11} className="stroke-[2.5]" /> : <Copy size={11} />}
+                                  <span>{copiedTransferId === req.id ? "تم النسخ" : "نسخ"}</span>
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => handleOpenEditModal(req)}

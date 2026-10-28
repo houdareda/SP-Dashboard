@@ -17,6 +17,7 @@ import {
   Wallet,
   Copy,
   AlertCircle,
+  Smartphone,
 } from "lucide-react";
 import {
   AdminFundRequest,
@@ -24,6 +25,11 @@ import {
   reviewFundRequest,
   getSingleFundRequest,
 } from "@/app/actions/adminOperations";
+import {
+  formatFundRequestTransferText,
+  copyToClipboard,
+  extractFundRequestWallets,
+} from "@/lib/fundUtils";
 
 interface FundRequestsClientProps {
   initialRequests: AdminFundRequest[];
@@ -109,6 +115,34 @@ export default function FundRequestsClient({
 
     const agentSuffix = agentName ? ` الخاص بالموظف (${agentName})` : "";
     showToast(`تم نسخ رقم المحفظة ${phoneNumber}${agentSuffix} بنجاح 📋`, "success");
+  };
+
+  // Copied Transfer Details State (ID or ID-phone)
+  const [copiedTransferId, setCopiedTransferId] = useState<string | null>(null);
+
+  const handleCopyTransferDetails = async (
+    e: React.MouseEvent,
+    req: AdminFundRequest,
+    specificWallet?: { phone_number?: string; amount?: number | string }
+  ) => {
+    e.stopPropagation();
+    const textToCopy = formatFundRequestTransferText(req, specificWallet);
+    if (!textToCopy) return;
+
+    const success = await copyToClipboard(textToCopy);
+    if (!success) {
+      showToast("تعذر نسخ البيانات إلى الحافظة", "error");
+      return;
+    }
+
+    const copyKey = specificWallet?.phone_number ? `${req.id}-${specificWallet.phone_number}` : req.id;
+    setCopiedTransferId(copyKey);
+    setTimeout(() => {
+      setCopiedTransferId((prev) => (prev === copyKey ? null : prev));
+    }, 2500);
+
+    const agentName = req.agent?.full_name || "الموظف";
+    showToast(`تم نسخ بيانات التحويل (${agentName}) بنجاح 📋`, "success");
   };
 
   // Sync server-side props with local state
@@ -369,8 +403,8 @@ export default function FundRequestsClient({
       </div>
 
       {/* Filters Box */}
-      <div className="backdrop-blur-xl bg-brand-card/95 border border-brand-border/55 p-6 rounded-[24px] shadow-xl relative z-40">
-        <div className="flex flex-wrap items-end gap-6 text-right">
+      <div className="backdrop-blur-xl bg-brand-card/95 border border-brand-border/55 p-4 sm:p-6 rounded-[24px] shadow-xl relative z-40">
+        <div className="flex flex-wrap items-end gap-4 sm:gap-6 text-right">
           {/* 1. Agent Filter (Custom Multi-select) */}
           <div className="space-y-2 w-full sm:w-[280px] relative" ref={agentDropdownRef}>
             <label className="block text-[13px] font-medium text-brand-dim">اسم الموظف</label>
@@ -463,33 +497,44 @@ export default function FundRequestsClient({
 
           {/* 2. Date Range Picker */}
           <div className="space-y-2 w-full sm:w-[350px]">
-            <label className="block text-[13px] font-medium text-brand-dim">تاريخ الطلب</label>
-            <div className="flex gap-2 items-center">
-              <div className="relative flex-1">
+            <div className="flex items-center justify-between">
+              <label className="block text-[13px] font-medium text-brand-dim">تاريخ الطلب</label>
+              {(startDate || endDate) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStartDate("");
+                    setEndDate("");
+                  }}
+                  className="text-[11px] text-brand-dim hover:text-white transition-colors cursor-pointer"
+                >
+                  مسح التاريخ
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
+              <div className="relative w-full min-w-0">
                 <input
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  onClick={(e) => e.currentTarget.showPicker()}
-                  placeholder="من"
-                  className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-10 py-3 text-xs text-white focus:outline-none focus:border-brand-accent transition-all text-left dir-ltr cursor-pointer"
+                  onClick={(e) => e.currentTarget.showPicker?.()}
+                  className="w-full h-[46px] bg-[#070814] border border-brand-border/80 rounded-xl pl-3 pr-10 text-xs text-white focus:outline-none focus:border-brand-accent transition-all text-left dir-ltr cursor-pointer font-inter"
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
-                  <Calendar size={13} />
+                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-brand-dim pointer-events-none text-xs font-cairo font-bold">
+                  من
                 </span>
               </div>
-              <span className="text-brand-dim text-xs">إلى</span>
-              <div className="relative flex-1">
+              <div className="relative w-full min-w-0">
                 <input
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  onClick={(e) => e.currentTarget.showPicker()}
-                  placeholder="إلى"
-                  className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-10 py-3 text-xs text-white focus:outline-none focus:border-brand-accent transition-all text-left dir-ltr cursor-pointer"
+                  onClick={(e) => e.currentTarget.showPicker?.()}
+                  className="w-full h-[46px] bg-[#070814] border border-brand-border/80 rounded-xl pl-3 pr-10 text-xs text-white focus:outline-none focus:border-brand-accent transition-all text-left dir-ltr cursor-pointer font-inter"
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
-                  <Calendar size={13} />
+                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-brand-dim pointer-events-none text-xs font-cairo font-bold">
+                  إلى
                 </span>
               </div>
             </div>
@@ -560,228 +605,465 @@ export default function FundRequestsClient({
         </span>
       </div>
 
-      {/* Requests Data Table */}
+      {/* Requests Data Container */}
       <div className="backdrop-blur-xl bg-brand-card/95 border border-brand-border/55 rounded-[24px] overflow-hidden shadow-xl relative z-20">
-        <div className="overflow-x-auto">
-          {filteredRequests.length > 0 ? (
-            <table className="w-full text-right border-collapse text-xs md:text-sm">
-              <thead>
-                <tr className="border-b border-brand-border/40 text-brand-dim/80 bg-[#070814]/20">
-                  <th className="py-4 px-6 font-bold">اسم الموظف</th>
-                  <th className="py-4 px-6 font-bold">التاريخ</th>
-                  <th className="py-4 px-6 font-bold">محفظة الاستلام</th>
-                  <th className="py-4 px-6 font-bold">المبلغ المطلوب</th>
-                  <th className="py-4 px-6 font-bold">الحالة</th>
-                  <th className="py-4 px-6 font-bold text-center">الإجراءات</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-brand-border/20">
-                {filteredRequests.map((req) => (
-                  <tr
+        {filteredRequests.length > 0 ? (
+          <>
+            {/* 1. Desktop Table View (md and up) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-right border-collapse text-xs md:text-sm">
+                <thead>
+                  <tr className="border-b border-brand-border/40 text-brand-dim/80 bg-[#070814]/20">
+                    <th className="py-4 px-6 font-bold">اسم الموظف</th>
+                    <th className="py-4 px-6 font-bold">التاريخ</th>
+                    <th className="py-4 px-6 font-bold">محفظة الاستلام</th>
+                    <th className="py-4 px-6 font-bold">المبلغ المطلوب</th>
+                    <th className="py-4 px-6 font-bold">الحالة</th>
+                    <th className="py-4 px-6 font-bold text-center">الإجراءات</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-brand-border/20">
+                  {filteredRequests.map((req) => {
+                    const isTransferCopied = copiedTransferId === req.id;
+                    return (
+                      <tr
+                        key={req.id}
+                        className="hover:bg-white/[0.01] transition-colors"
+                      >
+                        {/* Employee profile */}
+                        <td className="py-4.5 px-6">
+                          <div className="flex flex-col items-start gap-1.5">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center text-brand-accent shrink-0">
+                                <User size={14} />
+                              </div>
+                              <span className="font-semibold text-white capitalize">
+                                {req.agent?.full_name || "موظف"}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => handleCopyTransferDetails(e, req)}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer active:scale-95 ${
+                                isTransferCopied
+                                  ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]"
+                                  : "bg-brand-accent/10 hover:bg-brand-accent/20 border-brand-accent/30 text-brand-accent hover:text-white"
+                              }`}
+                              title="نسخ بيانات التحويل: الاسم ورقم المحفظة والمبلغ المطلوب"
+                            >
+                              {isTransferCopied ? (
+                                <>
+                                  <Check size={11} className="stroke-[2.5]" />
+                                  <span>تم النسخ ✓</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy size={11} />
+                                  <span>نسخ للتحويل</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </td>
+
+                        {/* Date */}
+                        <td className="py-4.5 px-6 font-inter text-white/95">
+                          {req.request_date}
+                        </td>
+
+                        {/* Target Wallet and Smart Balance */}
+                        <td className="py-4.5 px-6 space-y-1 text-right">
+                          {req.is_multi_wallet ? (
+                            <div className="space-y-1.5">
+                              <span className="inline-block px-1.5 py-0.5 text-[9.5px] font-extrabold bg-brand-accent/20 text-brand-accent border border-brand-accent/30 rounded-md mb-0.5 animate-pulse font-cairo">
+                                طلب متعدد المحافظ
+                              </span>
+                              <div className="text-xs text-white/95 space-y-1 font-inter font-semibold">
+                                {Array.isArray(req.multi_wallet_data) ? (
+                                  req.multi_wallet_data.filter((item: any) => item && !item.__audit).map((item: any, idx: number) => {
+                                    const isCopied = copiedPhone === item.phone_number;
+                                    const subKey = `${req.id}-${item.phone_number}`;
+                                    const isSubCopied = copiedTransferId === subKey;
+                                    return (
+                                      <div key={idx} className="flex items-center gap-2 group/copy">
+                                        <span
+                                          onClick={(e) => handleCopyWalletNumber(e, item.phone_number, req.agent?.full_name)}
+                                          className="font-mono cursor-pointer hover:text-brand-accent transition-colors hover:underline underline-offset-4"
+                                          title="اضغط لنسخ الرقم"
+                                        >
+                                          {item.phone_number} {item.esim_number ? `(${item.esim_number})` : ""}
+                                        </span>
+                                        {item.phone_number && (
+                                          <div className="flex items-center gap-1">
+                                            <button
+                                              type="button"
+                                              onClick={(e) => handleCopyWalletNumber(e, item.phone_number, req.agent?.full_name)}
+                                              className={`p-1 rounded-md border transition-all cursor-pointer ${
+                                                isCopied
+                                                  ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                                                  : "bg-white/5 hover:bg-white/10 border-white/10 text-white/40 hover:text-white"
+                                              }`}
+                                              title="نسخ الرقم فقط"
+                                            >
+                                              {isCopied ? <Check size={11} className="stroke-[2.5]" /> : <Copy size={11} />}
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => handleCopyTransferDetails(e, req, { phone_number: item.phone_number, amount: item.amount_requested || item.amount })}
+                                              className={`px-1.5 py-0.5 rounded-md border text-[10px] font-bold transition-all cursor-pointer flex items-center gap-0.5 ${
+                                                isSubCopied
+                                                  ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                                                  : "bg-brand-accent/10 hover:bg-brand-accent/20 border-brand-accent/25 text-brand-accent hover:text-white"
+                                              }`}
+                                              title="نسخ بيانات هذه المحفظة والمبلغ فقط"
+                                            >
+                                              {isSubCopied ? <Check size={10} className="stroke-[2.5]" /> : <Copy size={10} />}
+                                              <span>{isSubCopied ? "تم" : "تحويل"}</span>
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })
+                                ) : (
+                                  <div
+                                    onClick={(e) => handleCopyWalletNumber(e, req.wallet?.phone_number || "", req.agent?.full_name)}
+                                    className="cursor-pointer hover:text-brand-accent transition-colors"
+                                  >
+                                    {req.wallet?.phone_number || "محفظة غير معروفة"}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-2 group/copy">
+                                <span
+                                  onClick={(e) => handleCopyWalletNumber(e, req.wallet?.phone_number || "", req.agent?.full_name)}
+                                  className="font-bold text-white font-inter tracking-wide cursor-pointer hover:text-brand-accent transition-colors hover:underline underline-offset-4"
+                                  title="اضغط لنسخ الرقم"
+                                >
+                                  {req.wallet?.phone_number || "محفظة غير معروفة"}
+                                </span>
+                                {req.wallet?.phone_number && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleCopyWalletNumber(e, req.wallet?.phone_number || "", req.agent?.full_name)}
+                                    className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                                      copiedPhone === req.wallet.phone_number
+                                        ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                                        : "bg-white/5 hover:bg-white/10 border-white/10 text-white/40 hover:text-white group-hover/copy:border-brand-accent/40 group-hover/copy:text-brand-accent"
+                                    }`}
+                                    title="نسخ الرقم"
+                                  >
+                                    {copiedPhone === req.wallet.phone_number ? (
+                                      <Check size={12} className="stroke-[2.5]" />
+                                    ) : (
+                                      <Copy size={12} />
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                              <div className="text-[10.5px] text-brand-dim font-cairo">
+                                الرصيد: {req.wallet_balance.toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م
+                              </div>
+                            </>
+                          )}
+                        </td>
+
+                        {/* Requested amount */}
+                        <td className="py-4.5 px-6 space-y-0.5">
+                          <span className="font-bold text-brand-accent font-inter text-base tracking-wide block">
+                            {req.amount_requested.toLocaleString("en-US")} ج.م
+                          </span>
+                          {req.is_multi_wallet && Array.isArray(req.multi_wallet_data) && (
+                            <div className="text-[10px] text-brand-dim/80 space-y-0.5">
+                              {req.multi_wallet_data.filter((item: any) => item && !item.__audit).map((item: any, idx: number) => (
+                                <div key={idx} className="dir-ltr text-right font-inter">
+                                  {Number(item.amount_requested || item.amount).toLocaleString("en-US")} ج.م
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Status Badge */}
+                        <td className="py-4.5 px-6">
+                          {req.status === "pending" && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-amber-400 bg-amber-400/10 border border-amber-400/25 rounded-full">
+                              <Clock size={12} />
+                              <span>قيد الانتظار</span>
+                            </span>
+                          )}
+                          {req.status === "approved" && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/25 rounded-full">
+                              <CheckCircle2 size={12} />
+                              <span>مقبول</span>
+                            </span>
+                          )}
+                          {req.status === "rejected" && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-red-400 bg-red-400/10 border border-red-400/25 rounded-full">
+                              <AlertTriangle size={12} />
+                              <span>مرفوض</span>
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Actions block */}
+                        <td className="py-4.5 px-6 text-center">
+                          {req.status === "pending" ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                type="button"
+                                onClick={(e) => handleCopyTransferDetails(e, req)}
+                                className={`px-2.5 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 ${
+                                  isTransferCopied
+                                    ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                                    : "bg-white/5 hover:bg-white/10 border-white/15 text-white/80 hover:text-white"
+                                }`}
+                                title="نسخ بيانات التحويل (الاسم + المحفظة + المبلغ)"
+                              >
+                                {isTransferCopied ? <Check size={13} className="text-emerald-400 stroke-[2.5]" /> : <Copy size={13} />}
+                                <span>{isTransferCopied ? "تم النسخ" : "نسخ"}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenApproveModal(req)}
+                                disabled={isPending}
+                                className="flex items-center gap-1 px-4.5 py-2 bg-brand-accent hover:bg-brand-accent/90 text-white font-bold rounded-xl transition-all cursor-pointer text-xs hover:shadow-[0_0_15px_rgba(139,92,246,0.25)] active:scale-95 disabled:opacity-50"
+                              >
+                                <Check size={13} />
+                                <span>موافقة</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleReject(req)}
+                                disabled={isPending}
+                                className="w-8.5 h-8.5 flex items-center justify-center bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/25 hover:text-white rounded-xl transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                                title="رفض الطلب"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="text-[11px] text-brand-dim/80 space-y-1.5 max-w-xs mx-auto text-right">
+                              <div>
+                                <span className="font-semibold">المراجع: </span>
+                                <span className="text-white capitalize">{req.reviewer?.full_name || "إدارة"}</span>
+                              </div>
+                              {req.status === "approved" && (
+                                <div className="text-emerald-400">
+                                  <span className="font-semibold">المبلغ المعتمد: </span>
+                                  <span className="font-bold font-inter">
+                                    {Number(req.amount_approved).toLocaleString("en-US")} ج.م
+                                  </span>
+                                </div>
+                              )}
+                              <div className="text-[9.5px] text-brand-dim/50 font-inter dir-ltr text-right">
+                                {req.approved_at ? new Date(req.approved_at).toLocaleString("ar-EG-u-nu-latn", { timeZone: "Asia/Riyadh" }) : ""}
+                              </div>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* 2. Mobile Responsive Cards View (Phones & small screens) */}
+            <div className="block md:hidden space-y-3.5 p-3.5 sm:p-4">
+              {filteredRequests.map((req) => {
+                const isTransferCopied = copiedTransferId === req.id;
+                const isWalletCopied = copiedPhone === req.wallet?.phone_number;
+
+                return (
+                  <div
                     key={req.id}
-                    className="hover:bg-white/[0.01] transition-colors"
+                    className="bg-[#090b17]/95 border border-brand-border/60 rounded-2xl p-4 space-y-3.5 shadow-lg relative overflow-hidden backdrop-blur-md"
                   >
-                    {/* Employee profile */}
-                    <td className="py-4.5 px-6">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center text-brand-accent shrink-0">
-                          <User size={14} />
+                    {/* Top: Employee info & Status badge */}
+                    <div className="flex items-center justify-between gap-3 border-b border-brand-border/20 pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-full bg-brand-accent/15 border border-brand-accent/30 flex items-center justify-center text-brand-accent shrink-0">
+                          <User size={16} />
                         </div>
-                        <span className="font-semibold text-white capitalize">
-                          {req.agent?.full_name || "موظف"}
+                        <div>
+                          <h4 className="font-bold text-white text-sm capitalize">{req.agent?.full_name || "موظف"}</h4>
+                          <span className="text-[11px] text-brand-dim font-inter">{req.request_date}</span>
+                        </div>
+                      </div>
+                      <div>
+                        {req.status === "pending" && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-amber-400 bg-amber-400/10 border border-amber-400/25 rounded-full">
+                            <Clock size={11} />
+                            <span>قيد الانتظار</span>
+                          </span>
+                        )}
+                        {req.status === "approved" && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/25 rounded-full">
+                            <CheckCircle2 size={11} />
+                            <span>مقبول</span>
+                          </span>
+                        )}
+                        {req.status === "rejected" && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-red-400 bg-red-400/10 border border-red-400/25 rounded-full">
+                            <AlertTriangle size={11} />
+                            <span>مرفوض</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Amount & Wallet Details Summary Box */}
+                    <div className="grid grid-cols-2 gap-2.5 bg-[#050711]/60 p-3 rounded-xl border border-brand-border/30">
+                      <div>
+                        <span className="text-[10.5px] text-brand-dim block font-medium">المبلغ المطلوب:</span>
+                        <span className="font-bold font-inter text-brand-accent text-base tracking-wide">
+                          {Number(req.amount_requested).toLocaleString("en-US")} ج.م
                         </span>
                       </div>
-                    </td>
-
-                    {/* Date */}
-                    <td className="py-4.5 px-6 font-inter text-white/95">
-                      {req.request_date}
-                    </td>
-
-                    {/* Target Wallet and Smart Balance */}
-                    <td className="py-4.5 px-6 space-y-1 text-right">
-                      {req.is_multi_wallet ? (
-                        <div className="space-y-1.5">
-                          <span className="inline-block px-1.5 py-0.5 text-[9.5px] font-extrabold bg-brand-accent/20 text-brand-accent border border-brand-accent/30 rounded-md mb-0.5 animate-pulse font-cairo">
-                            طلب متعدد المحافظ
-                          </span>
-                          <div className="text-xs text-white/95 space-y-1 font-inter font-semibold">
-                            {Array.isArray(req.multi_wallet_data) ? (
-                              req.multi_wallet_data.map((item: any, idx: number) => {
-                                const isCopied = copiedPhone === item.phone_number;
-                                return (
-                                  <div key={idx} className="flex items-center gap-2 group/copy">
-                                    <span
-                                      onClick={(e) => handleCopyWalletNumber(e, item.phone_number, req.agent?.full_name)}
-                                      className="font-mono cursor-pointer hover:text-brand-accent transition-colors hover:underline underline-offset-4"
-                                      title="اضغط لنسخ الرقم"
-                                    >
-                                      {item.phone_number} {item.esim_number ? `(${item.esim_number})` : ""}
-                                    </span>
-                                    {item.phone_number && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => handleCopyWalletNumber(e, item.phone_number, req.agent?.full_name)}
-                                        className={`p-1 rounded-md border transition-all cursor-pointer ${
-                                          isCopied
-                                            ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
-                                            : "bg-white/5 hover:bg-white/10 border-white/10 text-white/40 hover:text-white group-hover/copy:border-brand-accent/40 group-hover/copy:text-brand-accent"
-                                        }`}
-                                        title="نسخ الرقم"
-                                      >
-                                        {isCopied ? <Check size={11} className="stroke-[2.5]" /> : <Copy size={11} />}
-                                      </button>
-                                    )}
-                                  </div>
-                                );
-                              })
-                            ) : (
-                              <div
-                                onClick={(e) => handleCopyWalletNumber(e, req.wallet?.phone_number || "", req.agent?.full_name)}
-                                className="cursor-pointer hover:text-brand-accent transition-colors"
-                              >
-                                {req.wallet?.phone_number || "محفظة غير معروفة"}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex items-center gap-2 group/copy">
-                            <span
-                              onClick={(e) => handleCopyWalletNumber(e, req.wallet?.phone_number || "", req.agent?.full_name)}
-                              className="font-bold text-white font-inter tracking-wide cursor-pointer hover:text-brand-accent transition-colors hover:underline underline-offset-4"
-                              title="اضغط لنسخ الرقم"
-                            >
-                              {req.wallet?.phone_number || "محفظة غير معروفة"}
+                      <div>
+                        <span className="text-[10.5px] text-brand-dim block font-medium">محفظة الاستلام:</span>
+                        {!req.is_multi_wallet ? (
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="font-mono font-bold text-xs text-white dir-ltr">
+                              {req.wallet?.phone_number || "غير معروفة"}
                             </span>
                             {req.wallet?.phone_number && (
                               <button
                                 type="button"
                                 onClick={(e) => handleCopyWalletNumber(e, req.wallet?.phone_number || "", req.agent?.full_name)}
-                                className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
-                                  copiedPhone === req.wallet.phone_number
-                                    ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
-                                    : "bg-white/5 hover:bg-white/10 border-white/10 text-white/40 hover:text-white group-hover/copy:border-brand-accent/40 group-hover/copy:text-brand-accent"
-                                }`}
-                                title="نسخ الرقم"
+                                className="p-1 rounded text-white/40 hover:text-white"
+                                title="نسخ الرقم فقط"
                               >
-                                {copiedPhone === req.wallet.phone_number ? (
-                                  <Check size={12} className="stroke-[2.5]" />
+                                {isWalletCopied ? (
+                                  <Check size={11} className="text-emerald-400" />
                                 ) : (
-                                  <Copy size={12} />
+                                  <Copy size={11} />
                                 )}
                               </button>
                             )}
                           </div>
-                          <div className="text-[10.5px] text-brand-dim font-cairo">
-                            الرصيد: {req.wallet_balance.toLocaleString("en-US", { minimumFractionDigits: 2 })} ج.م
-                          </div>
+                        ) : (
+                          <span className="text-[11px] text-brand-accent font-bold">طلب متعدد المحافظ</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Multi-wallet breakdown if present */}
+                    {req.is_multi_wallet && Array.isArray(req.multi_wallet_data) && (
+                      <div className="space-y-1.5 bg-[#050711]/40 p-2.5 rounded-xl border border-brand-border/20 text-xs">
+                        <span className="text-[10px] text-brand-dim block font-bold mb-1">تفاصيل المحافظ والمبالغ:</span>
+                        {req.multi_wallet_data.filter((w: any) => w && !w.__audit).map((w: any, idx: number) => {
+                          const subKey = `${req.id}-${w.phone_number}`;
+                          const isSubCopied = copiedTransferId === subKey;
+                          return (
+                            <div key={idx} className="flex items-center justify-between bg-white/[0.02] p-2 rounded-lg border border-white/5">
+                              <div className="font-mono text-white text-[11px]">
+                                <span>{w.phone_number}</span>
+                                {w.esim_number && <span className="text-[9.5px] text-brand-dim block font-cairo">({w.esim_number})</span>}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-inter font-bold text-brand-accent text-xs">
+                                  {Number(w.amount_requested || w.amount || 0).toLocaleString("en-US")} ج.م
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleCopyTransferDetails(e, req, { phone_number: w.phone_number, amount: w.amount_requested || w.amount })}
+                                  className={`px-2 py-1 rounded-md border text-[10px] font-bold flex items-center gap-1 transition-all ${
+                                    isSubCopied
+                                      ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                                      : "bg-brand-accent/15 border-brand-accent/30 text-brand-accent"
+                                  }`}
+                                  title="نسخ بيانات هذه المحفظة فقط"
+                                >
+                                  {isSubCopied ? <Check size={11} className="stroke-[2.5]" /> : <Copy size={11} />}
+                                  <span>{isSubCopied ? "تم" : "نسخ للتحويل"}</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* THE PROMINENT MOBILE COPY BUTTON (Clear, Large, Highly Touch-Friendly) */}
+                    <button
+                      type="button"
+                      onClick={(e) => handleCopyTransferDetails(e, req)}
+                      className={`w-full py-3 px-4 rounded-xl border flex items-center justify-center gap-2 text-xs font-bold transition-all shadow-sm active:scale-[0.98] cursor-pointer ${
+                        isTransferCopied
+                          ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.25)]"
+                          : "bg-gradient-to-r from-brand-accent/25 via-brand-accent/15 to-brand-accent/25 hover:bg-brand-accent/35 border-brand-accent/40 text-white shadow-[0_0_12px_rgba(139,92,246,0.18)]"
+                      }`}
+                    >
+                      {isTransferCopied ? (
+                        <>
+                          <Check size={16} className="text-emerald-400 stroke-[2.5]" />
+                          <span className="font-cairo">تم نسخ بيانات التحويل بالكامل ✓</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={15} className="text-brand-accent" />
+                          <span className="font-cairo">نسخ بيانات التحويل (الاسم + المحفظة + المبلغ)</span>
                         </>
                       )}
-                    </td>
+                    </button>
 
-                    {/* Requested amount */}
-                    <td className="py-4.5 px-6 space-y-0.5">
-                      <span className="font-bold text-brand-accent font-inter text-base tracking-wide block">
-                        {req.amount_requested.toLocaleString("en-US")} ج.م
-                      </span>
-                      {req.is_multi_wallet && Array.isArray(req.multi_wallet_data) && (
-                        <div className="text-[10px] text-brand-dim/80 space-y-0.5">
-                          {req.multi_wallet_data.map((item: any, idx: number) => (
-                            <div key={idx} className="dir-ltr text-right font-inter">
-                              {Number(item.amount_requested || item.amount).toLocaleString("en-US")} ج.م
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Status Badge */}
-                    <td className="py-4.5 px-6">
-                      {req.status === "pending" && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-amber-400 bg-amber-400/10 border border-amber-400/25 rounded-full">
-                          <Clock size={12} />
-                          <span>قيد الانتظار</span>
-                        </span>
-                      )}
-                      {req.status === "approved" && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/25 rounded-full">
-                          <CheckCircle2 size={12} />
-                          <span>مقبول</span>
-                        </span>
-                      )}
-                      {req.status === "rejected" && (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold text-red-400 bg-red-400/10 border border-red-400/25 rounded-full">
-                          <AlertTriangle size={12} />
-                          <span>مرفوض</span>
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Actions block */}
-                    <td className="py-4.5 px-6 text-center">
-                      {req.status === "pending" ? (
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenApproveModal(req)}
-                            disabled={isPending}
-                            className="flex items-center gap-1 px-4.5 py-2 bg-brand-accent hover:bg-brand-accent/90 text-white font-bold rounded-xl transition-all cursor-pointer text-xs hover:shadow-[0_0_15px_rgba(139,92,246,0.25)] active:scale-95 disabled:opacity-50"
-                          >
-                            <Check size={13} />
-                            <span>موافقة</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleReject(req)}
-                            disabled={isPending}
-                            className="w-8.5 h-8.5 flex items-center justify-center bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/25 hover:text-white rounded-xl transition-all cursor-pointer active:scale-95 disabled:opacity-50"
-                            title="رفض الطلب"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="text-[11px] text-brand-dim/80 space-y-1.5 max-w-xs mx-auto text-right">
-                          <div>
-                            <span className="font-semibold">المراجع: </span>
-                            <span className="text-white capitalize">{req.reviewer?.full_name || "إدارة"}</span>
-                          </div>
-                          {req.status === "approved" && (
-                            <div className="text-emerald-400">
-                              <span className="font-semibold">المبلغ المعتمد: </span>
-                              <span className="font-bold font-inter">
-                                {Number(req.amount_approved).toLocaleString("en-US")} ج.م
-                              </span>
-                            </div>
-                          )}
-                          <div className="text-[9.5px] text-brand-dim/50 font-inter dir-ltr text-right">
-                            {req.approved_at ? new Date(req.approved_at).toLocaleString("ar-EG-u-nu-latn", { timeZone: "Asia/Riyadh" }) : ""}
-                          </div>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="border border-dashed border-brand-border/20 rounded-[24px] bg-[#070814]/10 py-20 text-center">
-              <div className="flex flex-col items-center justify-center space-y-4 max-w-sm mx-auto">
-                <div className="w-14 h-14 rounded-2xl bg-white/[0.01] border border-brand-border/30 text-brand-dim/40 flex items-center justify-center shadow-inner">
-                  <Clock size={28} />
-                </div>
-                <div className="space-y-1.5">
-                  <h4 className="text-base font-bold text-white">لا توجد طلبات شحن رصيد</h4>
-                  <p className="text-xs text-brand-dim/70 leading-relaxed">
-                    لا تتوفر طلبات شحن معلقة أو مأرشفة مطابقة لخيارات البحث المحددة حالياً.
-                  </p>
-                </div>
+                    {/* Action Buttons for Mobile */}
+                    {req.status === "pending" ? (
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenApproveModal(req)}
+                          disabled={isPending}
+                          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-brand-accent hover:bg-brand-accent/90 text-white font-bold rounded-xl transition-all cursor-pointer text-xs active:scale-95 disabled:opacity-50 shadow-md"
+                        >
+                          <Check size={14} />
+                          <span>موافقة</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleReject(req)}
+                          disabled={isPending}
+                          className="w-11 h-10 flex items-center justify-center bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/25 rounded-xl transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                          title="رفض الطلب"
+                        >
+                          <X size={15} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="pt-2 border-t border-brand-border/20 text-[11px] text-brand-dim/80 flex items-center justify-between">
+                        <span>المراجع: <strong className="text-white">{req.reviewer?.full_name || "إدارة"}</strong></span>
+                        {req.status === "approved" && (
+                          <span className="text-emerald-400 font-bold font-inter">
+                            {Number(req.amount_approved).toLocaleString("en-US")} ج.م
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <div className="border border-dashed border-brand-border/20 rounded-[24px] bg-[#070814]/10 py-20 text-center">
+            <div className="flex flex-col items-center justify-center space-y-4 max-w-sm mx-auto">
+              <div className="w-14 h-14 rounded-2xl bg-white/[0.01] border border-brand-border/30 text-brand-dim/40 flex items-center justify-center shadow-inner">
+                <Clock size={28} />
+              </div>
+              <div className="space-y-1.5">
+                <h4 className="text-base font-bold text-white">لا توجد طلبات شحن رصيد</h4>
+                <p className="text-xs text-brand-dim/70 leading-relaxed">
+                  لا تتوفر طلبات شحن معلقة أو مأرشفة مطابقة لخيارات البحث المحددة حالياً.
+                </p>
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Confirmation approval modal dialog */}
