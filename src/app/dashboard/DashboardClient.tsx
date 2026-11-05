@@ -57,19 +57,24 @@ export default function DashboardClient({
   const [data, setData] = useState<DashboardOverviewData>(initialData);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  // Default dates: Start of current month to today
+  // Default dates: Start of current month to today in Egypt timezone (Africa/Cairo)
+  const getEgyptDateParts = () =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Africa/Cairo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    })
+      .format(new Date())
+      .split("-");
+
   const getStartOfCurrentMonth = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const [year, month] = getEgyptDateParts();
     return `${year}-${month}-01`;
   };
 
   const getTodayDate = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
-    const day = String(now.getDate()).padStart(2, "0");
+    const [year, month, day] = getEgyptDateParts();
     return `${year}-${month}-${day}`;
   };
 

@@ -60,9 +60,9 @@ export async function getWallets() {
       return { success: true, wallets: [] as WalletData[] };
     }
 
-    // Determine current month's bounds in the local timezone (UTC+3)
+    // Determine current month's bounds in the local timezone (Africa/Cairo)
     const formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Riyadh",
+      timeZone: "Africa/Cairo",
       year: "numeric",
       month: "2-digit",
     });

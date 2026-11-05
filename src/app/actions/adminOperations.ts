@@ -45,11 +45,13 @@ import {
 
 export interface EditExpenseRequestData {
   id: string;
-  expense_id: string;
+  expense_id: string | null;
   agent_id: string;
   created_at: string;
   status: "pending" | "approved" | "rejected";
   requested_changes: {
+    is_new_expense?: boolean;
+    expense_date?: string;
     total_amount: number;
     marketing_expenses?: Record<string, number>;
     marketing_1: number;
@@ -164,9 +166,9 @@ export async function getAdminFundRequests() {
       return { success: false, error: "حدث خطأ أثناء حساب أرصدة المحافظ." };
     }
 
-    // Determine current month's bounds in UTC+3 (Asia/Riyadh)
+    // Determine current month's bounds in Egypt timezone (Africa/Cairo)
     const formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Riyadh",
+      timeZone: "Africa/Cairo",
       year: "numeric",
       month: "2-digit",
     });
@@ -283,7 +285,7 @@ export async function getSingleFundRequest(requestId: string) {
         .single();
 
       const formatter = new Intl.DateTimeFormat("en-US", {
-        timeZone: "Asia/Riyadh",
+        timeZone: "Africa/Cairo",
         year: "numeric",
         month: "2-digit",
       });
@@ -827,26 +829,30 @@ export async function getPendingEditRequests() {
       return { success: false, error: "حدث خطأ أثناء جلب طلبات تعديل المصاريف." };
     }
 
-    // 3. For each request, fetch the original transfers associated with the expense
+    // 3. For each request, fetch the original transfers associated with the expense (if expense_id exists)
     const requestDataList: EditExpenseRequestData[] = [];
     for (const req of (requests || [])) {
-      const { data: transfers, error: transfersError } = await supabaseAdmin
-        .from("expense_transfers")
-        .select(`
-          id,
-          amount,
-          to_agent_id,
-          to_agent:profiles!expense_transfers_to_agent_id_fkey(full_name)
-        `)
-        .eq("expense_id", req.expense_id);
+      let transfers: any[] = [];
+      if (req.expense_id) {
+        const { data: tData, error: transfersError } = await supabaseAdmin
+          .from("expense_transfers")
+          .select(`
+            id,
+            amount,
+            to_agent_id,
+            to_agent:profiles!expense_transfers_to_agent_id_fkey(full_name)
+          `)
+          .eq("expense_id", req.expense_id);
 
-      if (transfersError) {
-        console.warn(`Error fetching transfers for expense ${req.expense_id}:`, transfersError);
+        if (transfersError) {
+          console.warn(`Error fetching transfers for expense ${req.expense_id}:`, transfersError);
+        }
+        transfers = tData || [];
       }
 
       requestDataList.push({
         ...req,
-        original_transfers: (transfers || []) as any[],
+        original_transfers: transfers,
       });
     }
 
@@ -878,7 +884,7 @@ export async function getPendingEditRequests() {
  */
 export async function reviewEditRequest(
   requestId: string,
-  expenseId: string,
+  expenseId: string | null,
   status: "approved" | "rejected",
   newChanges?: any
 ) {
@@ -899,28 +905,172 @@ export async function reviewEditRequest(
       return { success: false, error: "غير مصرح لك بإجراء هذه العملية." };
     }
 
-    if (!requestId || !expenseId) {
+    if (!requestId) {
       return { success: false, error: "بيانات الطلب غير صحيحة." };
     }
 
     // 2. Fetch the request to verify pending status
     const { data: editReq, error: editReqError } = await supabaseAdmin
       .from("edit_expense_requests")
-      .select("status, agent_id")
+      .select("status, agent_id, expense_id, requested_changes")
       .eq("id", requestId)
       .single();
 
     if (editReqError || !editReq) {
-      return { success: false, error: "لم يتم العثور على طلب تعديل المصاريف." };
+      return { success: false, error: "لم يتم العثور على الطلب." };
     }
 
     if (editReq.status !== "pending") {
       return { success: false, error: "تمت مراجعة هذا الطلب بالفعل مسبقاً." };
     }
 
-    // 3. Process approval database operations
+    const resolvedChanges = newChanges || editReq.requested_changes;
+    const resolvedExpenseId = expenseId || editReq.expense_id;
+    const isNewPastExpense = Boolean(resolvedChanges?.is_new_expense || !resolvedExpenseId);
+
+    // 3-A. Handle New Past-Date Expense Request (creating a new daily_expenses row upon approval)
+    if (isNewPastExpense) {
+      const targetDate = resolvedChanges?.expense_date;
+      if (!targetDate) {
+        return { success: false, error: "تاريخ التقرير المطلوب إضافته غير موجود في بيانات الطلب." };
+      }
+
+      let createdExpenseId: string | null = null;
+
+      if (status === "approved") {
+        // Ensure no daily_expenses record was already added for this agent & date
+        const { data: existingDaily, error: dupCheckErr } = await supabaseAdmin
+          .from("daily_expenses")
+          .select("id")
+          .eq("agent_id", editReq.agent_id)
+          .eq("expense_date", targetDate)
+          .maybeSingle();
+
+        if (dupCheckErr) {
+          return { success: false, error: "حدث خطأ أثناء التحقق من عدم وجود مصاريف مكررة." };
+        }
+
+        if (existingDaily) {
+          return {
+            success: false,
+            error: `يوجد بالفعل تقرير مصاريف مسجل لهذا الموظف في تاريخ (${targetDate}). لا يمكن اعتماد تقريرين لنفس اليوم.`,
+          };
+        }
+
+        // Insert new record into daily_expenses
+        const { data: insertedExpense, error: insertExpenseError } = await supabaseAdmin
+          .from("daily_expenses")
+          .insert({
+            agent_id: editReq.agent_id,
+            expense_date: targetDate,
+            total_amount: Number(resolvedChanges.total_amount) || 0,
+            marketing_expenses: resolvedChanges.marketing_expenses || {},
+            marketing_1: Number(resolvedChanges.marketing_1) || 0,
+            marketing_2: Number(resolvedChanges.marketing_2) || 0,
+            marketing_3: Number(resolvedChanges.marketing_3) || 0,
+            personal_expense: Number(resolvedChanges.personal_expense) || 0,
+            total_cash: Number(resolvedChanges.total_cash) || 0,
+          })
+          .select("id")
+          .single();
+
+        if (insertExpenseError || !insertedExpense) {
+          console.error("Error inserting approved past daily expense:", insertExpenseError);
+          return { success: false, error: `فشل إضافة التقرير المالي: ${insertExpenseError?.message || ""}` };
+        }
+
+        createdExpenseId = insertedExpense.id;
+
+        // Insert transfers if present
+        if (resolvedChanges.transfers && resolvedChanges.transfers.length > 0) {
+          const transfersToInsert = resolvedChanges.transfers.map((t: any) => ({
+            expense_id: createdExpenseId,
+            from_agent_id: editReq.agent_id,
+            to_agent_id: t.to_agent_id,
+            amount: Number(t.amount) || 0,
+          }));
+
+          const { error: insertTransfersError } = await supabaseAdmin
+            .from("expense_transfers")
+            .insert(transfersToInsert);
+
+          if (insertTransfersError) {
+            console.error("Error inserting transfers for past daily expense, rolling back:", insertTransfersError);
+            await supabaseAdmin.from("daily_expenses").delete().eq("id", createdExpenseId);
+            return { success: false, error: `فشل تسجيل تحويلات العهدة: ${insertTransfersError.message}` };
+          }
+
+          // Notify receiving colleagues of custody transfers
+          try {
+            const { data: senderProfile } = await supabaseAdmin
+              .from("profiles")
+              .select("full_name")
+              .eq("id", editReq.agent_id)
+              .single();
+
+            const senderName = senderProfile?.full_name || "زميلك";
+            for (const t of resolvedChanges.transfers) {
+              if (t.to_agent_id && Number(t.amount) > 0) {
+                const title = "تحويل عهدة وارد جديد";
+                const message = `قام الموظف (${senderName}) بتحويل مبلغ (${Number(t.amount).toLocaleString("en-US")} ج.م) إلى حساب العهدة الخاص بك (تقرير يوم ${targetDate}).`;
+                await createNotification(t.to_agent_id, title, message);
+              }
+            }
+          } catch (notifErr) {
+            console.error("Error sending custody transfer notifications on past expense approval:", notifErr);
+          }
+        }
+      }
+
+      // Update status (and link expense_id if approved) in edit_expense_requests
+      const updatePayload: any = {
+        status,
+        reviewed_by: user.id,
+        reviewed_at: new Date().toISOString(),
+      };
+      if (createdExpenseId) {
+        updatePayload.expense_id = createdExpenseId;
+      }
+
+      const { error: updateRequestError } = await supabaseAdmin
+        .from("edit_expense_requests")
+        .update(updatePayload)
+        .eq("id", requestId);
+
+      if (updateRequestError) {
+        console.error("Error updating past expense request status:", updateRequestError);
+        return { success: false, error: `فشل تحديث حالة الطلب: ${updateRequestError.message}` };
+      }
+
+      // Send notification to the agent
+      try {
+        const title = status === "approved" ? "تم اعتماد إضافة المصاريف السابقة" : "تم رفض طلب المصاريف السابقة";
+        const message =
+          status === "approved"
+            ? `تمت الموافقة على طلب إغلاق المصاريف الخاص بك لتاريخ ${targetDate} وإضافته بنجاح في السجلات.`
+            : `تم رفض طلب إضافة المصاريف بتاريخ سابق ليوم ${targetDate}.`;
+
+        await createNotification(editReq.agent_id, title, message);
+      } catch (notifErr) {
+        console.error("Failed to send past expense review notification to agent:", notifErr);
+      }
+
+      revalidatePath("/dashboard/management/edit-requests");
+      revalidatePath("/dashboard/management/history");
+      revalidatePath("/dashboard/operations");
+      revalidatePath("/dashboard/logs");
+      revalidatePath("/dashboard");
+
+      return { success: true };
+    }
+
+    // 3-B. Standard Edit Expense Request (modifying an existing daily_expenses record)
+    if (!resolvedExpenseId) {
+      return { success: false, error: "معرف التقرير الأصلي غير موجود." };
+    }
+
     if (status === "approved") {
-      if (!newChanges) {
+      if (!resolvedChanges) {
         return { success: false, error: "التغييرات المقترحة فارغة." };
       }
 
@@ -928,15 +1078,15 @@ export async function reviewEditRequest(
       const { error: updateExpenseError } = await supabaseAdmin
         .from("daily_expenses")
         .update({
-          total_amount: Number(newChanges.total_amount),
-          marketing_expenses: newChanges.marketing_expenses || {},
-          marketing_1: Number(newChanges.marketing_1) || 0,
-          marketing_2: Number(newChanges.marketing_2) || 0,
-          marketing_3: Number(newChanges.marketing_3) || 0,
-          personal_expense: Number(newChanges.personal_expense) || 0,
-          total_cash: Number(newChanges.total_cash) || 0,
+          total_amount: Number(resolvedChanges.total_amount),
+          marketing_expenses: resolvedChanges.marketing_expenses || {},
+          marketing_1: Number(resolvedChanges.marketing_1) || 0,
+          marketing_2: Number(resolvedChanges.marketing_2) || 0,
+          marketing_3: Number(resolvedChanges.marketing_3) || 0,
+          personal_expense: Number(resolvedChanges.personal_expense) || 0,
+          total_cash: Number(resolvedChanges.total_cash) || 0,
         })
-        .eq("id", expenseId);
+        .eq("id", resolvedExpenseId);
 
       if (updateExpenseError) {
         console.error("Error updating base daily_expenses record:", updateExpenseError);
@@ -948,7 +1098,7 @@ export async function reviewEditRequest(
       const { error: deleteTransfersError } = await supabaseAdmin
         .from("expense_transfers")
         .delete()
-        .eq("expense_id", expenseId);
+        .eq("expense_id", resolvedExpenseId);
 
       if (deleteTransfersError) {
         console.error("Error deleting old transfers for commit:", deleteTransfersError);
@@ -956,9 +1106,9 @@ export async function reviewEditRequest(
       }
 
       // Insert new transfers if they exist in requested changes
-      if (newChanges.transfers && newChanges.transfers.length > 0) {
-        const transfersToInsert = newChanges.transfers.map((t: any) => ({
-          expense_id: expenseId,
+      if (resolvedChanges.transfers && resolvedChanges.transfers.length > 0) {
+        const transfersToInsert = resolvedChanges.transfers.map((t: any) => ({
+          expense_id: resolvedExpenseId,
           from_agent_id: editReq.agent_id,
           to_agent_id: t.to_agent_id,
           amount: Number(t.amount) || 0,
@@ -995,7 +1145,7 @@ export async function reviewEditRequest(
       const { data: originalExpense } = await supabaseAdmin
         .from("daily_expenses")
         .select("expense_date")
-        .eq("id", expenseId)
+        .eq("id", resolvedExpenseId)
         .single();
 
       const expenseDate = originalExpense?.expense_date || "";
@@ -1045,23 +1195,27 @@ export async function getSingleEditRequest(requestId: string) {
       return { success: false, error: "فشل العثور على طلب التعديل." };
     }
 
-    const { data: transfers, error: transfersError } = await supabaseAdmin
-      .from("expense_transfers")
-      .select(`
-        id,
-        amount,
-        to_agent_id,
-        to_agent:profiles!expense_transfers_to_agent_id_fkey(full_name)
-      `)
-      .eq("expense_id", req.expense_id);
+    let transfers: any[] = [];
+    if (req.expense_id) {
+      const { data: tData, error: transfersError } = await supabaseAdmin
+        .from("expense_transfers")
+        .select(`
+          id,
+          amount,
+          to_agent_id,
+          to_agent:profiles!expense_transfers_to_agent_id_fkey(full_name)
+        `)
+        .eq("expense_id", req.expense_id);
 
-    if (transfersError) {
-      console.warn(`Error fetching transfers for expense ${req.expense_id}:`, transfersError);
+      if (transfersError) {
+        console.warn(`Error fetching transfers for expense ${req.expense_id}:`, transfersError);
+      }
+      transfers = tData || [];
     }
 
     const requestData: EditExpenseRequestData = {
       ...req,
-      original_transfers: (transfers || []) as any[],
+      original_transfers: transfers,
     };
 
     return {
@@ -1677,7 +1831,7 @@ export async function getAgentsCustodyReport(params: {
 
     // Determine current month bounds for wallet monthly balance calculation
     const formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Riyadh",
+      timeZone: "Africa/Cairo",
       year: "numeric",
       month: "2-digit",
     });

@@ -2781,7 +2781,22 @@ export default function HistoryClient({
                             {formatDateTime(req.created_at)}
                           </td>
                           <td className="py-4 font-bold text-white">
-                            {req.expense?.expense_date ? formatDate(req.expense.expense_date) : "-"}
+                            <div>
+                              {req.expense?.expense_date
+                                ? formatDate(req.expense.expense_date)
+                                : changes.expense_date
+                                ? formatDate(changes.expense_date)
+                                : "-"}
+                            </div>
+                            {changes.is_new_expense ? (
+                              <span className="inline-block mt-1 text-[9.5px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 font-bold">
+                                إضافة مصاريف بتاريخ سابق
+                              </span>
+                            ) : (
+                              <span className="inline-block mt-1 text-[9.5px] px-2 py-0.5 rounded bg-brand-accent/15 text-brand-accent border border-brand-accent/25 font-bold">
+                                تعديل تقرير مصاريف
+                              </span>
+                            )}
                           </td>
                           <td className="py-4 max-w-[280px]">
                             <div className="flex flex-col gap-1 bg-[#090b16]/40 border border-brand-border/20 rounded-xl p-2.5 text-[10px] leading-relaxed text-brand-dim">

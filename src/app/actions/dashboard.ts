@@ -181,7 +181,7 @@ export async function getDashboardOverview(params: {
 
     // Calculate current month's bounds to query wallet calculated balances
     const formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Riyadh",
+      timeZone: "Africa/Cairo",
       year: "numeric",
       month: "2-digit",
     });

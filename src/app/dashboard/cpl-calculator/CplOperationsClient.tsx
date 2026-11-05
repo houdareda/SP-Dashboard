@@ -66,7 +66,7 @@ export default function CplOperationsClient({
   const getLocalDateString = (offsetDays = 0) => {
     const date = new Date(Date.now() + offsetDays * 24 * 60 * 60 * 1000);
     const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Riyadh", // UTC+3
+      timeZone: "Africa/Cairo",
       year: "numeric",
       month: "2-digit",
       day: "2-digit",

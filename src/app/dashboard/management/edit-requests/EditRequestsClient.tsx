@@ -107,7 +107,13 @@ export default function EditRequestsClient({
                 if (prev.some((r) => r.id === res.request!.id)) return prev;
                 return [res.request!, ...prev];
               });
-              showToast(`تم تقديم طلب تعديل مصاريف جديد من ${res.request.agent?.full_name || "موظف"}.`, "success");
+              const isNewPast = Boolean(res.request.requested_changes?.is_new_expense || !res.request.expense_id);
+              showToast(
+                isNewPast
+                  ? `تم تقديم طلب إضافة مصاريف بتاريخ سابق من ${res.request.agent?.full_name || "موظف"}.`
+                  : `تم تقديم طلب تعديل مصاريف جديد من ${res.request.agent?.full_name || "موظف"}.`,
+                "success"
+              );
             }
           } else if (payload.eventType === "UPDATE") {
             if (payload.new.status !== "pending") {
@@ -161,6 +167,7 @@ export default function EditRequestsClient({
   // 2. Action Handlers
   const handleDirectApproval = (req: EditExpenseRequestData) => {
     setSubmittingId(req.id);
+    const isNewPast = Boolean(req.requested_changes?.is_new_expense || !req.expense_id);
     startTransition(async () => {
       const res = await reviewEditRequest(
         req.id,
@@ -170,12 +177,17 @@ export default function EditRequestsClient({
       );
 
       if (res.success) {
-        showToast("تمت الموافقة على طلب التعديل وتحديث التقرير الأصلي بنجاح.", "success");
+        showToast(
+          isNewPast
+            ? "تمت الموافقة على الطلب وإضافة تقرير المصاريف بنجاح."
+            : "تمت الموافقة على طلب التعديل وتحديث التقرير الأصلي بنجاح.",
+          "success"
+        );
         // Optimistically remove from active local state
         setRequests((prev) => prev.filter((r) => r.id !== req.id));
         router.refresh();
       } else {
-        showToast(res.error || "فشل اعتماد طلب التعديل.", "error");
+        showToast(res.error || "فشل اعتماد الطلب.", "error");
       }
       setSubmittingId(null);
     });
@@ -192,13 +204,13 @@ export default function EditRequestsClient({
       );
 
       if (res.success) {
-        showToast("تم رفض طلب التعديل بنجاح.", "success");
+        showToast("تم رفض الطلب بنجاح.", "success");
         setRejectTarget(null);
         // Optimistically remove from active local state
         setRequests((prev) => prev.filter((r) => r.id !== rejectTarget.id));
         router.refresh();
       } else {
-        showToast(res.error || "فشل رفض طلب التعديل.", "error");
+        showToast(res.error || "فشل رفض الطلب.", "error");
       }
     });
   };
@@ -213,7 +225,7 @@ export default function EditRequestsClient({
         }
 
         // Filter by date bounds
-        const reqDateStr = req.expense?.expense_date || ""; // YYYY-MM-DD
+        const reqDateStr = req.expense?.expense_date || req.requested_changes?.expense_date || ""; // YYYY-MM-DD
         if (startDate && reqDateStr < startDate) {
           return false;
         }
@@ -519,6 +531,8 @@ export default function EditRequestsClient({
           {filteredRequests.map((req) => {
             const changesList = getCustodyTransfersChanges(req);
             const isExpanded = !!expandedRequests[req.id];
+            const isNewExpense = Boolean(req.requested_changes?.is_new_expense || !req.expense_id);
+            const reportDate = req.expense?.expense_date || req.requested_changes?.expense_date || "-";
             
             return (
               <div
@@ -538,9 +552,15 @@ export default function EditRequestsClient({
                     </div>
                     <div className="text-right space-y-0.5">
                       <h4 className="text-base font-bold text-white capitalize">{req.agent?.full_name || "موظف"}</h4>
-                      <span className="inline-block text-[10px] bg-brand-accent/10 text-brand-accent font-bold px-2 py-0.5 rounded border border-brand-accent/15">
-                        تعديل المصاريف والتحويلات اليومية
-                      </span>
+                      {isNewExpense ? (
+                        <span className="inline-block text-[10px] bg-emerald-500/15 text-emerald-400 font-bold px-2.5 py-0.5 rounded border border-emerald-500/25">
+                          إضافة مصاريف بتاريخ سابق (تقرير جديد)
+                        </span>
+                      ) : (
+                        <span className="inline-block text-[10px] bg-brand-accent/10 text-brand-accent font-bold px-2 py-0.5 rounded border border-brand-accent/15">
+                          تعديل المصاريف والتحويلات اليومية
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -551,7 +571,7 @@ export default function EditRequestsClient({
                     </span>
                     <span className="inline-flex items-center gap-1.5 text-xs text-brand-dim font-semibold bg-white/5 px-3.5 py-1.5 rounded-xl border border-white/5">
                       <Calendar size={13} className="text-brand-accent" />
-                      <span>تاريخ التقرير: <span className="font-inter font-bold text-white/90">{req.expense?.expense_date}</span></span>
+                      <span>تاريخ التقرير: <span className="font-inter font-bold text-white/90">{reportDate}</span></span>
                     </span>
                     <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-brand-dim/60 hover:text-white transition-colors">
                       <ChevronDown
@@ -576,11 +596,25 @@ export default function EditRequestsClient({
                 {/* Grid Comparison Layout */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
                   
-                  {/* Column 1 (Right): Current Base Report Details */}
+                  {/* Column 1 (Right): Current Base Report Details OR Info for New Past Expense */}
                   <div className="bg-[#070814]/30 border border-brand-border/40 p-5 rounded-2xl space-y-4">
                     <h5 className="text-[13px] font-bold text-brand-dim border-b border-brand-border/20 pb-2">
-                      | البيانات الحالية (التقرير الأصلي)
+                      {isNewExpense ? "| حالة التقرير في هذا التاريخ" : "| البيانات الحالية (التقرير الأصلي)"}
                     </h5>
+                    {isNewExpense ? (
+                      <div className="py-8 px-4 flex flex-col items-center justify-center text-center space-y-3">
+                        <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 flex items-center justify-center">
+                          <Calendar size={22} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <h6 className="text-sm font-bold text-white">تقرير مصاريف جديد بتاريخ سابق</h6>
+                          <p className="text-xs text-brand-dim leading-relaxed">
+                            لا يوجد تقرير مالي مسجل مسبقاً للموظف في تاريخ{" "}
+                            <span className="font-inter font-bold text-white dir-ltr">({reportDate})</span>. عند الموافقة سيتم إغلاق اليوم المالي وإضافة المصاريف والتحويلات الموضحة في السجلات والعهدة.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
                     <div className="space-y-3.5 text-xs md:text-sm">
                       <div className="flex justify-between items-center">
                         <span className="text-brand-dim">المصاريف الشخصية</span>
@@ -625,19 +659,24 @@ export default function EditRequestsClient({
                         <span className="text-white font-inter">{(req.expense?.total_cash || 0).toLocaleString("en-US")}</span>
                       </div>
                     </div>
+                    )}
                   </div>
 
                   {/* Column 2 (Left): Proposed Modifications Details */}
                   <div className="bg-[#070814]/30 border border-brand-border/40 p-5 rounded-2xl space-y-4">
                     <h5 className="text-[13px] font-bold text-brand-dim border-b border-brand-border/20 pb-2">
-                      | البيانات المقترحة (طلب التعديل)
+                      {isNewExpense ? "| بيانات المصاريف المطلوب إضافتها" : "| البيانات المقترحة (طلب التعديل)"}
                     </h5>
                     <div className="space-y-3.5 text-xs md:text-sm">
                       
                       {/* Personal Expense Check */}
                       <div className="flex justify-between items-center">
                         <span className="text-brand-dim">المصاريف الشخصية</span>
-                        {req.requested_changes.personal_expense === req.expense?.personal_expense ? (
+                        {isNewExpense ? (
+                          <span className="font-bold font-inter text-emerald-400">
+                            {(req.requested_changes.personal_expense || 0).toLocaleString("en-US")}
+                          </span>
+                        ) : req.requested_changes.personal_expense === req.expense?.personal_expense ? (
                           <span className="text-brand-dim/50 text-[11px] font-medium">لا يوجد تغيير</span>
                         ) : (
                           <span className="font-bold font-inter flex items-center gap-1.5">
@@ -665,7 +704,11 @@ export default function EditRequestsClient({
                           return (
                             <div key={sys.id} className="flex justify-between items-center">
                               <span className="text-brand-dim">{sys.name}</span>
-                              {!hasChanged ? (
+                              {isNewExpense ? (
+                                <span className="font-bold font-inter text-white">
+                                  {Number(propVal || 0).toLocaleString("en-US")}
+                                </span>
+                              ) : !hasChanged ? (
                                 <span className="text-brand-dim/50 text-[11px] font-medium">لا يوجد تغيير</span>
                               ) : (
                                 <span className="font-bold font-inter flex items-center gap-1.5">
@@ -681,7 +724,9 @@ export default function EditRequestsClient({
                         <>
                           <div className="flex justify-between items-center">
                             <span className="text-brand-dim">مصاريف ماركتنج 1</span>
-                            {req.requested_changes.marketing_1 === req.expense?.marketing_1 ? (
+                            {isNewExpense ? (
+                              <span className="font-bold font-inter text-white">{(req.requested_changes.marketing_1 || 0).toLocaleString("en-US")}</span>
+                            ) : req.requested_changes.marketing_1 === req.expense?.marketing_1 ? (
                               <span className="text-brand-dim/50 text-[11px] font-medium">لا يوجد تغيير</span>
                             ) : (
                               <span className="font-bold font-inter flex items-center gap-1.5">
@@ -694,7 +739,9 @@ export default function EditRequestsClient({
 
                           <div className="flex justify-between items-center">
                             <span className="text-brand-dim">مصاريف ماركتنج 2</span>
-                            {req.requested_changes.marketing_2 === req.expense?.marketing_2 ? (
+                            {isNewExpense ? (
+                              <span className="font-bold font-inter text-white">{(req.requested_changes.marketing_2 || 0).toLocaleString("en-US")}</span>
+                            ) : req.requested_changes.marketing_2 === req.expense?.marketing_2 ? (
                               <span className="text-brand-dim/50 text-[11px] font-medium">لا يوجد تغيير</span>
                             ) : (
                               <span className="font-bold font-inter flex items-center gap-1.5">
@@ -707,7 +754,9 @@ export default function EditRequestsClient({
 
                           <div className="flex justify-between items-center">
                             <span className="text-brand-dim">مصاريف ماركتنج 3</span>
-                            {req.requested_changes.marketing_3 === req.expense?.marketing_3 ? (
+                            {isNewExpense ? (
+                              <span className="font-bold font-inter text-white">{(req.requested_changes.marketing_3 || 0).toLocaleString("en-US")}</span>
+                            ) : req.requested_changes.marketing_3 === req.expense?.marketing_3 ? (
                               <span className="text-brand-dim/50 text-[11px] font-medium">لا يوجد تغيير</span>
                             ) : (
                               <span className="font-bold font-inter flex items-center gap-1.5">
@@ -723,7 +772,11 @@ export default function EditRequestsClient({
                       {/* Total Amount Check */}
                       <div className="flex justify-between items-center border-t border-brand-border/20 pt-2.5 font-bold">
                         <span className="text-white">إجمالي مصروفات المحفظة</span>
-                        {req.requested_changes.total_amount === req.expense?.total_amount ? (
+                        {isNewExpense ? (
+                          <span className="text-brand-accent text-sm font-inter">
+                            {(req.requested_changes.total_amount || 0).toLocaleString("en-US")}
+                          </span>
+                        ) : req.requested_changes.total_amount === req.expense?.total_amount ? (
                           <span className="text-brand-accent text-sm font-inter">{(req.expense?.total_amount || 0).toLocaleString("en-US")}</span>
                         ) : (
                           <span className="font-bold text-sm font-inter flex items-center gap-1.5">
@@ -736,8 +789,12 @@ export default function EditRequestsClient({
 
                       {/* Total Cash Check */}
                       <div className="flex justify-between items-center border-t border-brand-border/10 pt-2">
-                        <span className="text-brand-dim">توتال الكاش المقترح</span>
-                        {req.requested_changes.total_cash === req.expense?.total_cash || req.requested_changes.total_cash === undefined ? (
+                        <span className="text-brand-dim">{isNewExpense ? "توتال الكاش (Over View)" : "توتال الكاش المقترح"}</span>
+                        {isNewExpense ? (
+                          <span className="font-bold font-inter text-white">
+                            {(req.requested_changes.total_cash || 0).toLocaleString("en-US")}
+                          </span>
+                        ) : req.requested_changes.total_cash === req.expense?.total_cash || req.requested_changes.total_cash === undefined ? (
                           <span className="text-brand-dim/50 text-[11px] font-medium">لا يوجد تغيير</span>
                         ) : (
                           <span className="font-bold font-inter flex items-center gap-1.5">
@@ -811,7 +868,7 @@ export default function EditRequestsClient({
                 {/* Custody Transfers Comparison Block */}
                 <div className="bg-[#070814]/30 border border-brand-border/40 p-5 rounded-2xl space-y-3">
                   <h5 className="text-[13px] font-bold text-brand-dim border-b border-brand-border/20 pb-2">
-                    | تعديلات تحويلات العهدة للزملاء
+                    {isNewExpense ? "| تحويلات العهدة للزملاء في هذا التقرير" : "| تعديلات تحويلات العهدة للزملاء"}
                   </h5>
                   {changesList.length > 0 ? (
                     <div className="space-y-2.5">
@@ -845,7 +902,9 @@ export default function EditRequestsClient({
                     </div>
                   ) : (
                     <div className="text-center py-4 text-xs text-brand-dim/50">
-                      لا توجد تعديلات في تحويلات العهدة الخاصة بهذا التقرير.
+                      {isNewExpense
+                        ? "لا توجد تحويلات عهدة لزملاء في هذا التقرير."
+                        : "لا توجد تعديلات في تحويلات العهدة الخاصة بهذا التقرير."}
                     </div>
                   )}
                 </div>
@@ -872,7 +931,7 @@ export default function EditRequestsClient({
                     ) : (
                       <Check size={14} />
                     )}
-                    <span>موافقة واعتماد التعديل</span>
+                    <span>{isNewExpense ? "موافقة واعتماد المصاريف" : "موافقة واعتماد التعديل"}</span>
                   </button>
                 </div>
 
@@ -888,9 +947,9 @@ export default function EditRequestsClient({
               <Clock size={28} />
             </div>
             <div className="space-y-1.5">
-              <h4 className="text-base font-bold text-white">لا توجد طلبات تعديل</h4>
+              <h4 className="text-base font-bold text-white">لا توجد طلبات معلقة</h4>
               <p className="text-xs text-brand-dim/70 leading-relaxed">
-                لا تتوفر حالياً طلبات تعديل مصاريف معلقة للمراجعة والاعتماد.
+                لا تتوفر حالياً طلبات تعديل أو إضافة مصاريف معلقة للمراجعة والاعتماد.
               </p>
             </div>
           </div>
@@ -907,7 +966,7 @@ export default function EditRequestsClient({
             <div className="flex items-center justify-between border-b border-brand-border/20 pb-4">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <AlertTriangle size={20} className="text-red-400" />
-                <span>تأكيد رفض طلب التعديل</span>
+                <span>تأكيد رفض الطلب</span>
               </h3>
               <button
                 type="button"
@@ -922,13 +981,13 @@ export default function EditRequestsClient({
             {/* Modal Body */}
             <div className="space-y-4 text-xs md:text-sm">
               <p className="text-brand-dim leading-relaxed">
-                هل أنت متأكد من رغبتك في رفض طلب تعديل المصاريف المقدم من الموظف{" "}
+                هل أنت متأكد من رغبتك في رفض الطلب المقدم من الموظف{" "}
                 <span className="text-white font-bold">
                   {rejectTarget.agent?.full_name || "الموظف"}
                 </span>{" "}
-                بتاريخ{" "}
+                لتقرير يوم{" "}
                 <span className="text-white font-bold font-inter">
-                  {rejectTarget.expense?.expense_date}
+                  {rejectTarget.expense?.expense_date || rejectTarget.requested_changes?.expense_date}
                 </span>؟
               </p>
             </div>

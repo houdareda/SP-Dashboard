@@ -860,7 +860,7 @@ export default function FundRequestsClient({
                                 </div>
                               )}
                               <div className="text-[9.5px] text-brand-dim/50 font-inter dir-ltr text-right">
-                                {req.approved_at ? new Date(req.approved_at).toLocaleString("ar-EG-u-nu-latn", { timeZone: "Asia/Riyadh" }) : ""}
+                                {req.approved_at ? new Date(req.approved_at).toLocaleString("ar-EG-u-nu-latn", { timeZone: "Africa/Cairo" }) : ""}
                               </div>
                             </div>
                           )}

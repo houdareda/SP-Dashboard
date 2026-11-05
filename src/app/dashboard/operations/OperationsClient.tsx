@@ -25,6 +25,7 @@ import {
   FolderSync,
   Megaphone,
   Smartphone,
+  Clock,
 } from "lucide-react";
 import {
   WalletWithBalance,
@@ -33,6 +34,7 @@ import {
   submitDailyExpenses,
   getExpenseReportForDate,
   submitEditExpenseRequest,
+  checkDateExpenseAvailability,
 } from "@/app/actions/operations";
 
 interface OperationsClientProps {
@@ -68,7 +70,7 @@ export default function OperationsClient({
   const getLocalDateString = (offsetDays = 0) => {
     const date = new Date(Date.now() + offsetDays * 24 * 60 * 60 * 1000);
     const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Riyadh", // UTC+3
+      timeZone: "Africa/Cairo",
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -79,6 +81,17 @@ export default function OperationsClient({
   const todayStr = getLocalDateString(0);
   const yesterdayStr = getLocalDateString(-1);
   const tenDaysAgoStr = getLocalDateString(-10);
+
+  const getTwoMonthsAgoString = () => {
+    const [y, m, d] = todayStr.split("-").map(Number);
+    const targetDate = new Date(Date.UTC(y, m - 1 - 2, d));
+    const expectedMonth = (((m - 1 - 2) % 12) + 12) % 12;
+    if (targetDate.getUTCMonth() !== expectedMonth) {
+      targetDate.setUTCDate(0);
+    }
+    return targetDate.toISOString().slice(0, 10);
+  };
+  const twoMonthsAgoStr = getTwoMonthsAgoString();
 
   const showToast = (message: string, type: "success" | "error") => {
     setToast({ message, type });
@@ -235,7 +248,13 @@ export default function OperationsClient({
   // ----------------------------------------------------
   // TAB 2: DAILY EXPENSES & TRANSFERS STATES & LOGIC
   // ----------------------------------------------------
+  const [isPastDateExpense, setIsPastDateExpense] = useState(false);
   const [expenseDate, setExpenseDate] = useState("");
+  const [dateConflict, setDateConflict] = useState<{
+    hasExistingExpense: boolean;
+    hasPendingRequest: boolean;
+  } | null>(null);
+  const [isCheckingDate, setIsCheckingDate] = useState(false);
   const [totalAmount, setTotalAmount] = useState("");
   const [marketingExpenses, setMarketingExpenses] = useState<Record<string, string>>({});
   const [personalExpense, setPersonalExpense] = useState("");
@@ -254,6 +273,32 @@ export default function OperationsClient({
   useEffect(() => {
     setExpenseDate(todayStr);
   }, [todayStr]);
+
+  // Check if selected expenseDate already has an expense report or a pending request
+  useEffect(() => {
+    if (!expenseDate) {
+      setDateConflict(null);
+      return;
+    }
+    let isMounted = true;
+    setIsCheckingDate(true);
+    checkDateExpenseAvailability(expenseDate)
+      .then((res) => {
+        if (isMounted && res.success) {
+          setDateConflict({
+            hasExistingExpense: res.hasExistingExpense,
+            hasPendingRequest: res.hasPendingRequest,
+          });
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (isMounted) setIsCheckingDate(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [expenseDate]);
 
   const addTransferRow = () => {
     setTransfers([...transfers, { toAgentId: "", amount: "" }]);
@@ -276,8 +321,33 @@ export default function OperationsClient({
       showToast("يرجى تحديد تاريخ التقرير.", "error");
       return;
     }
-    if (expenseDate !== todayStr && expenseDate !== yesterdayStr) {
-      showToast("يُسمح فقط باختيار تاريخ اليوم أو الأمس للتقرير.", "error");
+
+    if (isPastDateExpense) {
+      if (expenseDate < twoMonthsAgoStr || expenseDate > todayStr) {
+        showToast(`يُسمح فقط باختيار تاريخ سابق بحد أقصى شهرين من تاريخ اليوم (من ${twoMonthsAgoStr} إلى ${todayStr}).`, "error");
+        return;
+      }
+    } else {
+      if (expenseDate !== todayStr && expenseDate !== yesterdayStr) {
+        showToast("يُسمح فقط باختيار تاريخ اليوم أو الأمس للتقرير في الوضع العادي.", "error");
+        return;
+      }
+    }
+
+    // Immediate block if expenses already exist for the selected date
+    if (dateConflict?.hasExistingExpense) {
+      showToast(
+        `عفواً، توجد مصاريف مضافة ومسجلة بالفعل في هذا التاريخ (${expenseDate})! لا يمكن إغلاق اليوم المالي أو إرسال مصاريف جديدة لنفس التاريخ.`,
+        "error"
+      );
+      return;
+    }
+
+    if (dateConflict?.hasPendingRequest) {
+      showToast(
+        `عفواً، لقد قمت بإرسال طلب مصاريف لهذا التاريخ (${expenseDate}) مسبقاً وهو قيد المراجعة حالياً لدى الإدارة والـ Senior Agent.`,
+        "error"
+      );
       return;
     }
 
@@ -327,12 +397,22 @@ export default function OperationsClient({
           totalCash: parseFloat(totalCash) || 0,
           cashAfterExpenses: 0,
           walletsBalances: [],
+          isPastDateRequest: isPastDateExpense,
         },
         closingPassword
       );
 
       if (res.success) {
-        showToast("تم إغلاق اليوم المالي بنجاح وحفظ كافة المصروفات والتحويلات.", "success");
+        if ((res as any).isPendingApproval) {
+          showToast(
+            `تم إرسال طلب مصاريف يوم (${expenseDate}) بنجاح إلى الإدارة والـ Senior Agent للمراجعة والاعتماد.`,
+            "success"
+          );
+          setDateConflict({ hasExistingExpense: false, hasPendingRequest: true });
+        } else {
+          showToast("تم إغلاق اليوم المالي بنجاح وحفظ كافة المصروفات والتحويلات.", "success");
+          setDateConflict({ hasExistingExpense: true, hasPendingRequest: false });
+        }
         setTotalAmount("");
         setMarketingExpenses({});
         setPersonalExpense("");
@@ -1045,13 +1125,101 @@ export default function OperationsClient({
 
             <form onSubmit={handleExpensesSubmit} className="space-y-6" autoComplete="off">
               
+              {/* Expense Date Mode Selector (Radio Buttons) */}
+              <div className="space-y-3">
+                <label className="block text-xs font-bold text-brand-dim">
+                  نوع إغلاق المصاريف
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {/* Option 1: Standard Today / Yesterday */}
+                  <div
+                    onClick={() => {
+                      if (!isPending) {
+                        setIsPastDateExpense(false);
+                        if (expenseDate !== todayStr && expenseDate !== yesterdayStr) {
+                          setExpenseDate(todayStr);
+                        }
+                      }
+                    }}
+                    className={`flex items-start gap-3.5 p-4 rounded-2xl border transition-all cursor-pointer select-none ${
+                      !isPastDateExpense
+                        ? "bg-brand-accent/15 border-brand-accent shadow-[0_0_20px_rgba(139,92,246,0.18)]"
+                        : "bg-[#090b16]/60 border-brand-border/40 hover:border-brand-border/80 hover:bg-white/[0.02]"
+                    }`}
+                  >
+                    <div
+                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 shrink-0 transition-all ${
+                        !isPastDateExpense ? "border-brand-accent bg-brand-accent/20" : "border-white/30"
+                      }`}
+                    >
+                      {!isPastDateExpense && <div className="w-2.5 h-2.5 rounded-full bg-brand-accent" />}
+                    </div>
+                    <div className="space-y-1 text-right">
+                      <div className="text-sm font-bold text-white flex items-center gap-2">
+                        <span>إغلاق اليوم المالي (اليوم / الأمس)</span>
+                      </div>
+                      <p className="text-[11px] text-brand-dim leading-relaxed">
+                        تسجيل وإغلاق مباشر وفوري لمصاريف اليوم أو الأمس دون الحاجة لانتظار مراجعة.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Option 2: Past Date (Up to 2 Months Back) */}
+                  <div
+                    onClick={() => {
+                      if (!isPending) {
+                        setIsPastDateExpense(true);
+                      }
+                    }}
+                    className={`flex items-start gap-3.5 p-4 rounded-2xl border transition-all cursor-pointer select-none ${
+                      isPastDateExpense
+                        ? "bg-amber-500/15 border-amber-500/60 shadow-[0_0_20px_rgba(245,158,11,0.15)]"
+                        : "bg-[#090b16]/60 border-brand-border/40 hover:border-brand-border/80 hover:bg-white/[0.02]"
+                    }`}
+                  >
+                    <div
+                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 shrink-0 transition-all ${
+                        isPastDateExpense ? "border-amber-400 bg-amber-400/20" : "border-white/30"
+                      }`}
+                    >
+                      {isPastDateExpense && <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />}
+                    </div>
+                    <div className="space-y-1 text-right">
+                      <div className="text-sm font-bold text-white flex items-center gap-2">
+                        <span>إرسال مصاريف بتاريخ سابق (حتى شهرين)</span>
+                      </div>
+                      <p className="text-[11px] text-brand-dim leading-relaxed">
+                        اختيار تاريخ قديم (حتى شهرين للوراء) وإرساله كطلب للإدارة والـ Senior Agent للموافقة عليه.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Informative Banner when Past-Date Mode is active */}
+                {isPastDateExpense && (
+                  <div className="p-4 bg-amber-500/10 border border-amber-500/25 rounded-2xl flex items-start gap-3 animate-fade-in text-right font-cairo">
+                    <Clock className="text-amber-400 mt-0.5 shrink-0" size={17} />
+                    <div className="space-y-1">
+                      <h4 className="text-xs md:text-sm font-bold text-amber-400">
+                        وضع إرسال مصاريف بتاريخ سابق (يتطلب موافقة الإدارة أو Senior Agent)
+                      </h4>
+                      <p className="text-xs text-brand-dim leading-relaxed">
+                        يمكنك اختيار أي تاريخ سابق خلال آخر شهرين (من{" "}
+                        <span className="font-inter font-bold text-white dir-ltr">{twoMonthsAgoStr}</span> إلى{" "}
+                        <span className="font-inter font-bold text-white dir-ltr">{todayStr}</span>). سيتم إرسال التقرير للمراجعة ولن يُقبل إذا كان هناك مصاريف مسجلة مسبقاً في نفس التاريخ.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Form Fields Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
             
                 {/* 1. Report Date (تاريخ التقرير) */}
                 <div className="space-y-2">
                   <label htmlFor="expenseDate" className="block text-[13px] font-medium text-brand-dim">
-                    تاريخ التقرير
+                    {isPastDateExpense ? "تاريخ التقرير السابق (حتى شهرين)" : "تاريخ التقرير"}
                   </label>
                   <div className="relative">
                     <input
@@ -1059,20 +1227,42 @@ export default function OperationsClient({
                       type="date"
                       required
                       disabled={isPending}
-                      min={yesterdayStr}
+                      min={isPastDateExpense ? twoMonthsAgoStr : yesterdayStr}
                       max={todayStr}
                       value={expenseDate}
                       onChange={(e) => setExpenseDate(e.target.value)}
                       onClick={(e) => e.currentTarget.showPicker()}
-                      className="w-full bg-[#070814]/80 border border-brand-border/80 rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-glow transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter cursor-pointer"
+                      className={`w-full bg-[#070814]/80 border rounded-xl pl-4 pr-11 py-3.5 text-sm text-white placeholder-white/20 focus:outline-none transition-all duration-300 disabled:opacity-50 text-left dir-ltr font-inter cursor-pointer ${
+                        dateConflict?.hasExistingExpense || dateConflict?.hasPendingRequest
+                          ? "border-red-500/70 focus:border-red-500"
+                          : "border-brand-border/80 focus:border-brand-accent focus:ring-1 focus:ring-brand-glow"
+                      }`}
                     />
                     <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none">
-                      <Calendar size={16} />
+                      {isCheckingDate ? <Loader2 size={16} className="animate-spin text-brand-accent" /> : <Calendar size={16} />}
                     </span>
                   </div>
-                  <span className="text-[10px] text-brand-dim/60 block mt-1">
-                    * يمكنك إغلاق اليوم بحد أقصى مرتين فقط
-                  </span>
+                  {dateConflict?.hasExistingExpense ? (
+                    <div className="flex items-start gap-1.5 text-[11px] text-red-400 font-bold mt-1.5 bg-red-500/10 border border-red-500/25 px-3 py-2 rounded-xl">
+                      <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                      <span>
+                        توجد مصاريف مضافة ومسجلة بالفعل في هذا التاريخ ({expenseDate}). لن يتم قبول إغلاق اليوم المالي لهذا التاريخ مرة أخرى.
+                      </span>
+                    </div>
+                  ) : dateConflict?.hasPendingRequest ? (
+                    <div className="flex items-start gap-1.5 text-[11px] text-amber-400 font-bold mt-1.5 bg-amber-500/10 border border-amber-500/25 px-3 py-2 rounded-xl">
+                      <Clock size={14} className="shrink-0 mt-0.5" />
+                      <span>
+                        يوجد طلب مصاريف مرسل مسبقاً لهذا التاريخ ({expenseDate}) وهو قيد المراجعة حالياً لدى الإدارة.
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-brand-dim/60 block mt-1">
+                      {isPastDateExpense
+                        ? `* مسموح باختيار التاريخ من ${twoMonthsAgoStr} حتى ${todayStr}`
+                        : "* يمكنك إغلاق اليوم المالي مرة واحدة فقط لكل تاريخ"}
+                    </span>
+                  )}
                 </div>
 
                 {/* 2. Total Cash (توتال الكاش - Over View) */}

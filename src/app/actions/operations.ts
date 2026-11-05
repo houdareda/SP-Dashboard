@@ -38,6 +38,7 @@ export interface DailyExpensesInput {
   totalCash: number;
   cashAfterExpenses: number;
   walletsBalances: { wallet_id: string; phone_number: string; balance: number }[];
+  isPastDateRequest?: boolean;
 }
 
 export interface EditExpensesRequestInput {
@@ -149,7 +150,7 @@ export async function submitFundRequest(input: FundRequestInput, passwordConfirm
 
     // 2. Validate date (Egypt local time constraints)
     const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Riyadh", // UTC+3 Egypt overlap
+      timeZone: "Africa/Cairo",
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -376,7 +377,70 @@ export async function getColleagues() {
 }
 
 /**
- * Action: Submit daily expenses report
+ * Helper: Calculate date bounds in Egypt timezone (Africa/Cairo)
+ */
+function getEgyptDateBounds() {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Cairo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const todayStr = formatter.format(new Date());
+  const yesterdayStr = formatter.format(new Date(Date.now() - 86400000));
+
+  const [y, m, d] = todayStr.split("-").map(Number);
+  const targetDate = new Date(Date.UTC(y, m - 1 - 2, d));
+  const expectedMonth = (((m - 1 - 2) % 12) + 12) % 12;
+  if (targetDate.getUTCMonth() !== expectedMonth) {
+    targetDate.setUTCDate(0);
+  }
+  const twoMonthsAgoStr = targetDate.toISOString().slice(0, 10);
+
+  return { todayStr, yesterdayStr, twoMonthsAgoStr };
+}
+
+/**
+ * Action: Check whether an expense report or a pending expense request already exists for a given date
+ */
+export async function checkDateExpenseAvailability(dateStr: string) {
+  try {
+    const user = await getCurrentUser();
+    if (!user || !dateStr) {
+      return { success: false, hasExistingExpense: false, hasPendingRequest: false };
+    }
+
+    const [{ data: existingRecord }, { data: pendingRequests }] = await Promise.all([
+      supabaseAdmin
+        .from("daily_expenses")
+        .select("id")
+        .eq("agent_id", user.id)
+        .eq("expense_date", dateStr)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("edit_expense_requests")
+        .select("id, requested_changes")
+        .eq("agent_id", user.id)
+        .eq("status", "pending"),
+    ]);
+
+    const hasPendingForDate = (pendingRequests || []).some(
+      (req: any) => req.requested_changes?.expense_date === dateStr
+    );
+
+    return {
+      success: true,
+      hasExistingExpense: Boolean(existingRecord),
+      hasPendingRequest: hasPendingForDate,
+    };
+  } catch (err) {
+    console.error("checkDateExpenseAvailability error:", err);
+    return { success: false, hasExistingExpense: false, hasPendingRequest: false };
+  }
+}
+
+/**
+ * Action: Submit daily expenses report (Direct for Today/Yesterday, or Pending Request for Past Dates up to 2 months)
  */
 export async function submitDailyExpenses(input: DailyExpensesInput, passwordConfirm?: string) {
   try {
@@ -385,30 +449,43 @@ export async function submitDailyExpenses(input: DailyExpensesInput, passwordCon
       return { success: false, error: "غير مصرح بالعملية. الرجاء تسجيل الدخول أولاً." };
     }
 
-    const { expenseDate, totalAmount, marketingExpenses, marketing1, marketing2, marketing3, personalExpense, transfers, totalCash, cashAfterExpenses, walletsBalances } = input;
+    const {
+      expenseDate,
+      totalAmount,
+      marketingExpenses,
+      marketing1,
+      marketing2,
+      marketing3,
+      personalExpense,
+      transfers,
+      totalCash,
+      isPastDateRequest,
+    } = input;
 
     // 1. Basic validation
     if (!expenseDate) {
       return { success: false, error: "تاريخ التقرير مطلوب." };
     }
 
-    const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Riyadh",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    const todayStr = formatter.format(new Date());
-    const yesterdayStr = formatter.format(new Date(Date.now() - 86400000));
+    const { todayStr, yesterdayStr, twoMonthsAgoStr } = getEgyptDateBounds();
 
-    if (expenseDate !== todayStr && expenseDate !== yesterdayStr) {
-      return { success: false, error: "عذراً، يُسمح فقط باختيار تاريخ اليوم أو الأمس." };
+    if (isPastDateRequest) {
+      if (expenseDate < twoMonthsAgoStr || expenseDate > todayStr) {
+        return {
+          success: false,
+          error: `عذراً، يُسمح باختيار تاريخ سابق بحد أقصى شهرين من تاريخ اليوم (من ${twoMonthsAgoStr} إلى ${todayStr}).`,
+        };
+      }
+    } else {
+      if (expenseDate !== todayStr && expenseDate !== yesterdayStr) {
+        return { success: false, error: "عذراً، يُسمح فقط باختيار تاريخ اليوم أو الأمس في الإغلاق المباشر." };
+      }
     }
 
     // Verify user profile is active
     const { data: profile, error: profileErr } = await supabaseAdmin
       .from("profiles")
-      .select("is_active")
+      .select("is_active, full_name")
       .eq("id", user.id)
       .single();
 
@@ -416,7 +493,7 @@ export async function submitDailyExpenses(input: DailyExpensesInput, passwordCon
       return { success: false, error: "حسابك موقوف، غير مصرح لك باتخاذ أي إجراء." };
     }
 
-    // 2. Double submission validation
+    // 2. Double submission validation (check both daily_expenses AND pending edit_expense_requests for this date)
     const { data: existingRecord, error: checkError } = await supabaseAdmin
       .from("daily_expenses")
       .select("id")
@@ -432,7 +509,29 @@ export async function submitDailyExpenses(input: DailyExpensesInput, passwordCon
     if (existingRecord) {
       return {
         success: false,
-        error: "لقد قمت بإغلاق اليوم المالي لهذا التاريخ مسبقاً، لا يمكنك إرسال تقريرين لنفس اليوم",
+        error: `عفواً، توجد مصاريف مضافة ومسجلة بالفعل في هذا التاريخ (${expenseDate})! لا يمكن إغلاق اليوم المالي أو إرسال مصاريف جديدة لنفس التاريخ.`,
+      };
+    }
+
+    const { data: pendingReqs, error: pendingCheckErr } = await supabaseAdmin
+      .from("edit_expense_requests")
+      .select("id, requested_changes")
+      .eq("agent_id", user.id)
+      .eq("status", "pending");
+
+    if (pendingCheckErr) {
+      console.error("Error checking pending expense requests:", pendingCheckErr);
+      return { success: false, error: "حدث خطأ أثناء التحقق من الطلبات المعلقة." };
+    }
+
+    const hasPendingForSameDate = (pendingReqs || []).some(
+      (r: any) => r.requested_changes?.expense_date === expenseDate
+    );
+
+    if (hasPendingForSameDate) {
+      return {
+        success: false,
+        error: `عفواً، لقد قمت بإرسال طلب مصاريف لهذا التاريخ (${expenseDate}) مسبقاً وهو قيد المراجعة حالياً لدى الإدارة والـ Senior Agent.`,
       };
     }
 
@@ -452,7 +551,67 @@ export async function submitDailyExpenses(input: DailyExpensesInput, passwordCon
     const legacyM2 = marketing2 !== undefined ? marketing2 : Number(mExpensesObj['22222222-2222-2222-2222-222222222222'] || 0);
     const legacyM3 = marketing3 !== undefined ? marketing3 : Number(mExpensesObj['33333333-3333-3333-3333-333333333333'] || 0);
 
-    // 4. Insert main expense record
+    // 4-A. If this is a Past-Date Expense Request (or backdated submission requiring Admin/SeniorAgent approval)
+    if (isPastDateRequest) {
+      const dbRequestedChanges = {
+        is_new_expense: true,
+        expense_date: expenseDate,
+        total_amount: totalAmount,
+        marketing_expenses: mExpensesObj,
+        marketing_1: legacyM1,
+        marketing_2: legacyM2,
+        marketing_3: legacyM3,
+        personal_expense: personalExpense,
+        transfers: (transfers || []).map((t) => ({
+          to_agent_id: t.toAgentId,
+          amount: t.amount,
+        })),
+        total_cash: totalCash,
+      };
+
+      const { error: insertReqError } = await supabaseAdmin
+        .from("edit_expense_requests")
+        .insert({
+          expense_id: null,
+          agent_id: user.id,
+          status: "pending",
+          requested_changes: dbRequestedChanges,
+        });
+
+      if (insertReqError) {
+        console.error("Error inserting past-date expense request:", insertReqError);
+        return { success: false, error: `فشل إرسال طلب المصاريف السابقة: ${insertReqError.message}` };
+      }
+
+      // Send real-time notifications to admins and senior agents
+      try {
+        const { data: staffMembers } = await supabaseAdmin
+          .from("profiles")
+          .select("id")
+          .in("role", ["admin", "senioragent"])
+          .eq("is_active", true);
+
+        if (staffMembers && staffMembers.length > 0) {
+          const title = "طلب إضافة مصاريف بتاريخ سابق";
+          const message = `قام الموظف ${profile.full_name} بتقديم طلب اعتماد مصاريف ليوم سابق بتاريخ ${expenseDate} بإجمالي ${Number(totalAmount).toLocaleString("en-US")} ج.م`;
+
+          await Promise.all(
+            staffMembers.map((staff) => createNotification(staff.id, title, message))
+          );
+        }
+      } catch (notifErr) {
+        console.error("Failed to send past-date expense request notifications:", notifErr);
+      }
+
+      revalidatePath("/dashboard/operations");
+      revalidatePath("/dashboard/logs");
+      revalidatePath("/dashboard/management/edit-requests");
+      revalidatePath("/dashboard/management/history");
+
+      return { success: true, isPendingApproval: true };
+    }
+
+    // 4-B. Insert main expense record directly (Normal Mode: Today / Yesterday)
     const { data: insertedExpense, error: expenseInsertError } = await supabaseAdmin
       .from("daily_expenses")
       .insert({
@@ -500,13 +659,7 @@ export async function submitDailyExpenses(input: DailyExpensesInput, passwordCon
 
       // Send notifications to each receiving agent
       try {
-        const { data: senderProfile } = await supabaseAdmin
-          .from("profiles")
-          .select("full_name")
-          .eq("id", user.id)
-          .single();
-
-        const senderName = senderProfile?.full_name || "زميلك";
+        const senderName = profile?.full_name || "زميلك";
 
         for (const t of transfers) {
           if (t.toAgentId && t.amount > 0) {
@@ -522,7 +675,7 @@ export async function submitDailyExpenses(input: DailyExpensesInput, passwordCon
 
     revalidatePath("/dashboard/operations");
     revalidatePath("/dashboard/logs");
-    return { success: true };
+    return { success: true, isPendingApproval: false };
   } catch (err: any) {
     console.error("submitDailyExpenses error:", err);
     return { success: false, error: err.message || "حدث خطأ غير متوقع." };
@@ -823,7 +976,7 @@ export async function getAgentWalletsWithBalances() {
 
     // Calculate balances based on approved requests this month
     const formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Riyadh",
+      timeZone: "Africa/Cairo",
       year: "numeric",
       month: "2-digit",
     });
