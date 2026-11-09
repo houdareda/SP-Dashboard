@@ -80,7 +80,21 @@ export default function OperationsClient({
 
   const todayStr = getLocalDateString(0);
   const yesterdayStr = getLocalDateString(-1);
+  const twoDaysAgoStr = getLocalDateString(-2);
   const tenDaysAgoStr = getLocalDateString(-10);
+
+  // Check if 12 hours have passed in the current Egypt day (12:00 PM Noon rule)
+  const getCurrentEgyptHour = () => {
+    const hourFormatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Africa/Cairo",
+      hour: "2-digit",
+      hourCycle: "h23",
+    });
+    return parseInt(hourFormatter.format(new Date()), 10);
+  };
+  const isTodayOpenForExpenses = getCurrentEgyptHour() >= 12;
+  const maxExpenseDateStr = isTodayOpenForExpenses ? todayStr : yesterdayStr;
+  const minNormalExpenseDateStr = isTodayOpenForExpenses ? yesterdayStr : twoDaysAgoStr;
 
   const getTwoMonthsAgoString = () => {
     const [y, m, d] = todayStr.split("-").map(Number);
@@ -253,8 +267,13 @@ export default function OperationsClient({
   const [dateConflict, setDateConflict] = useState<{
     hasExistingExpense: boolean;
     hasPendingRequest: boolean;
+    prevDay1: string;
+    prevDay2: string;
+    missingPrevDay1: boolean;
+    missingPrevDay2: boolean;
   } | null>(null);
   const [isCheckingDate, setIsCheckingDate] = useState(false);
+  const [showMissingDaysWarningModal, setShowMissingDaysWarningModal] = useState(false);
   const [totalAmount, setTotalAmount] = useState("");
   const [marketingExpenses, setMarketingExpenses] = useState<Record<string, string>>({});
   const [personalExpense, setPersonalExpense] = useState("");
@@ -271,10 +290,10 @@ export default function OperationsClient({
   }, [currentCustody]);
 
   useEffect(() => {
-    setExpenseDate(todayStr);
-  }, [todayStr]);
+    setExpenseDate(maxExpenseDateStr);
+  }, [maxExpenseDateStr]);
 
-  // Check if selected expenseDate already has an expense report or a pending request
+  // Check if selected expenseDate already has an expense report or a pending request, and check previous 2 days
   useEffect(() => {
     if (!expenseDate) {
       setDateConflict(null);
@@ -288,6 +307,10 @@ export default function OperationsClient({
           setDateConflict({
             hasExistingExpense: res.hasExistingExpense,
             hasPendingRequest: res.hasPendingRequest,
+            prevDay1: res.prevDay1 || "",
+            prevDay2: res.prevDay2 || "",
+            missingPrevDay1: Boolean(res.missingPrevDay1),
+            missingPrevDay2: Boolean(res.missingPrevDay2),
           });
         }
       })
@@ -314,6 +337,72 @@ export default function OperationsClient({
     );
   };
 
+  const executeExpensesSubmission = () => {
+    const totalMarketing = Object.values(marketingExpenses).reduce(
+      (sum, val) => sum + (parseFloat(val) || 0),
+      0
+    );
+    const pers = parseFloat(personalExpense) || 0;
+    const totAmt = parseFloat(totalAmount) || 0;
+
+    const formattedTransfers = transfers
+      .filter((t) => t.toAgentId && t.amount)
+      .map((t) => ({
+        toAgentId: t.toAgentId,
+        amount: parseFloat(t.amount) || 0,
+      }));
+
+    const formattedMarketing: Record<string, number> = {};
+    marketingSystems.forEach((sys) => {
+      formattedMarketing[sys.id] = parseFloat(marketingExpenses[sys.id] || "0") || 0;
+    });
+
+    setShowMissingDaysWarningModal(false);
+
+    startTransition(async () => {
+      const res = await submitDailyExpenses(
+        {
+          expenseDate,
+          totalAmount: totAmt,
+          marketingExpenses: formattedMarketing,
+          personalExpense: pers,
+          transfers: formattedTransfers,
+          totalCash: parseFloat(totalCash) || 0,
+          cashAfterExpenses: 0,
+          walletsBalances: [],
+          isPastDateRequest: isPastDateExpense,
+        },
+        closingPassword
+      );
+
+      if (res.success) {
+        if ((res as any).isPendingApproval) {
+          showToast(
+            `تم إرسال طلب مصاريف يوم (${expenseDate}) بنجاح إلى الإدارة والـ Senior Agent للمراجعة والاعتماد.`,
+            "success"
+          );
+          setDateConflict((prev) =>
+            prev ? { ...prev, hasExistingExpense: false, hasPendingRequest: true } : null
+          );
+        } else {
+          showToast("تم إغلاق اليوم المالي بنجاح وحفظ كافة المصروفات والتحويلات.", "success");
+          setDateConflict((prev) =>
+            prev ? { ...prev, hasExistingExpense: true, hasPendingRequest: false } : null
+          );
+        }
+        setTotalAmount("");
+        setMarketingExpenses({});
+        setPersonalExpense("");
+        setTransfers([]);
+        setClosingPassword("");
+
+        router.refresh();
+      } else {
+        showToast(res.error || "فشل إغلاق اليوم المالي.", "error");
+      }
+    });
+  };
+
   const handleExpensesSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -322,14 +411,31 @@ export default function OperationsClient({
       return;
     }
 
+    // Enforce 12:00 PM Noon rule for today
+    if (expenseDate === todayStr && !isTodayOpenForExpenses) {
+      showToast(
+        `عذراً، مصاريف اليوم الحالي (${todayStr}) لا تُفتح إلا بعد الساعة 12:00 ظهراً (بعد مرور 12 ساعة من بداية اليوم).`,
+        "error"
+      );
+      return;
+    }
+
     if (isPastDateExpense) {
-      if (expenseDate < twoMonthsAgoStr || expenseDate > todayStr) {
-        showToast(`يُسمح فقط باختيار تاريخ سابق بحد أقصى شهرين من تاريخ اليوم (من ${twoMonthsAgoStr} إلى ${todayStr}).`, "error");
+      if (expenseDate < twoMonthsAgoStr || expenseDate > maxExpenseDateStr) {
+        showToast(`يُسمح فقط باختيار تاريخ سابق بحد أقصى شهرين (من ${twoMonthsAgoStr} إلى ${maxExpenseDateStr}).`, "error");
         return;
       }
     } else {
-      if (expenseDate !== todayStr && expenseDate !== yesterdayStr) {
-        showToast("يُسمح فقط باختيار تاريخ اليوم أو الأمس للتقرير في الوضع العادي.", "error");
+      const allowedNormal = isTodayOpenForExpenses
+        ? [todayStr, yesterdayStr]
+        : [yesterdayStr, twoDaysAgoStr];
+      if (!allowedNormal.includes(expenseDate)) {
+        showToast(
+          isTodayOpenForExpenses
+            ? "يُسمح فقط باختيار تاريخ اليوم أو الأمس للتقرير في الوضع العادي."
+            : `قبل الساعة 12:00 ظهراً يُسمح فقط بإغلاق مصاريف يوم أمس (${yesterdayStr}) أو اليوم السابق له (${twoDaysAgoStr}).`,
+          "error"
+        );
         return;
       }
     }
@@ -374,56 +480,13 @@ export default function OperationsClient({
       return;
     }
 
-    const formattedTransfers = transfers
-      .filter((t) => t.toAgentId && t.amount)
-      .map((t) => ({
-        toAgentId: t.toAgentId,
-        amount: parseFloat(t.amount) || 0,
-      }));
+    // Warn user if yesterday or the day before yesterday is missing expenses!
+    if (dateConflict?.missingPrevDay1 || dateConflict?.missingPrevDay2) {
+      setShowMissingDaysWarningModal(true);
+      return;
+    }
 
-    const formattedMarketing: Record<string, number> = {};
-    marketingSystems.forEach((sys) => {
-      formattedMarketing[sys.id] = parseFloat(marketingExpenses[sys.id] || "0") || 0;
-    });
-
-    startTransition(async () => {
-      const res = await submitDailyExpenses(
-        {
-          expenseDate,
-          totalAmount: totAmt,
-          marketingExpenses: formattedMarketing,
-          personalExpense: pers,
-          transfers: formattedTransfers,
-          totalCash: parseFloat(totalCash) || 0,
-          cashAfterExpenses: 0,
-          walletsBalances: [],
-          isPastDateRequest: isPastDateExpense,
-        },
-        closingPassword
-      );
-
-      if (res.success) {
-        if ((res as any).isPendingApproval) {
-          showToast(
-            `تم إرسال طلب مصاريف يوم (${expenseDate}) بنجاح إلى الإدارة والـ Senior Agent للمراجعة والاعتماد.`,
-            "success"
-          );
-          setDateConflict({ hasExistingExpense: false, hasPendingRequest: true });
-        } else {
-          showToast("تم إغلاق اليوم المالي بنجاح وحفظ كافة المصروفات والتحويلات.", "success");
-          setDateConflict({ hasExistingExpense: true, hasPendingRequest: false });
-        }
-        setTotalAmount("");
-        setMarketingExpenses({});
-        setPersonalExpense("");
-        setTransfers([]);
-        setClosingPassword("");
-
-        router.refresh();
-      } else {
-        showToast(res.error || "فشل إغلاق اليوم المالي.", "error");
-      }
-    });
+    executeExpensesSubmission();
   };
 
   // ----------------------------------------------------
@@ -1136,8 +1199,11 @@ export default function OperationsClient({
                     onClick={() => {
                       if (!isPending) {
                         setIsPastDateExpense(false);
-                        if (expenseDate !== todayStr && expenseDate !== yesterdayStr) {
-                          setExpenseDate(todayStr);
+                        const allowedNormal = isTodayOpenForExpenses
+                          ? [todayStr, yesterdayStr]
+                          : [yesterdayStr, twoDaysAgoStr];
+                        if (!allowedNormal.includes(expenseDate)) {
+                          setExpenseDate(maxExpenseDateStr);
                         }
                       }
                     }}
@@ -1206,7 +1272,7 @@ export default function OperationsClient({
                       <p className="text-xs text-brand-dim leading-relaxed">
                         يمكنك اختيار أي تاريخ سابق خلال آخر شهرين (من{" "}
                         <span className="font-inter font-bold text-white dir-ltr">{twoMonthsAgoStr}</span> إلى{" "}
-                        <span className="font-inter font-bold text-white dir-ltr">{todayStr}</span>). سيتم إرسال التقرير للمراجعة ولن يُقبل إذا كان هناك مصاريف مسجلة مسبقاً في نفس التاريخ.
+                        <span className="font-inter font-bold text-white dir-ltr">{maxExpenseDateStr}</span>). سيتم إرسال التقرير للمراجعة ولن يُقبل إذا كان هناك مصاريف مسجلة مسبقاً في نفس التاريخ.
                       </p>
                     </div>
                   </div>
@@ -1227,8 +1293,8 @@ export default function OperationsClient({
                       type="date"
                       required
                       disabled={isPending}
-                      min={isPastDateExpense ? twoMonthsAgoStr : yesterdayStr}
-                      max={todayStr}
+                      min={isPastDateExpense ? twoMonthsAgoStr : minNormalExpenseDateStr}
+                      max={maxExpenseDateStr}
                       value={expenseDate}
                       onChange={(e) => setExpenseDate(e.target.value)}
                       onClick={(e) => e.currentTarget.showPicker()}
@@ -1257,11 +1323,76 @@ export default function OperationsClient({
                       </span>
                     </div>
                   ) : (
-                    <span className="text-[10px] text-brand-dim/60 block mt-1">
-                      {isPastDateExpense
-                        ? `* مسموح باختيار التاريخ من ${twoMonthsAgoStr} حتى ${todayStr}`
-                        : "* يمكنك إغلاق اليوم المالي مرة واحدة فقط لكل تاريخ"}
-                    </span>
+                    <div className="space-y-1.5 mt-1">
+                      <span className="text-[10px] text-brand-dim/60 block">
+                        {!isTodayOpenForExpenses
+                          ? `* ملاحظة: مصاريف اليوم الحالي (${todayStr}) تُفتح يومياً بعد الساعة 12:00 ظهراً (بعد مرور 12 ساعة من اليوم).`
+                          : isPastDateExpense
+                          ? `* مسموح باختيار التاريخ من ${twoMonthsAgoStr} حتى ${maxExpenseDateStr}`
+                          : "* يمكنك إغلاق اليوم المالي مرة واحدة فقط لكل تاريخ"}
+                      </span>
+
+                      {/* Missing Previous Days Warning Alert (Yesterday / Day Before Yesterday) */}
+                      {(dateConflict?.missingPrevDay1 || dateConflict?.missingPrevDay2) && (
+                        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2 animate-fade-in">
+                          <div className="flex items-start gap-2 text-[11px] text-amber-300 font-bold leading-relaxed">
+                            <AlertTriangle size={14} className="text-amber-400 shrink-0 mt-0.5" />
+                            <div>
+                              <span>تنبيه: لم تقم بإضافة مصاريف </span>
+                              {dateConflict.missingPrevDay1 && dateConflict.missingPrevDay2 ? (
+                                <span>
+                                  اليوم السابق (<span className="font-inter text-white dir-ltr">{dateConflict.prevDay1}</span>) ولا اليوم الذي قبله (<span className="font-inter text-white dir-ltr">{dateConflict.prevDay2}</span>)!
+                                </span>
+                              ) : dateConflict.missingPrevDay1 ? (
+                                <span>
+                                  اليوم السابق (<span className="font-inter text-white dir-ltr">{dateConflict.prevDay1}</span>) بعد!
+                                </span>
+                              ) : (
+                                <span>
+                                  اليوم قبل الماضي (<span className="font-inter text-white dir-ltr">{dateConflict.prevDay2}</span>) بعد!
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                            {dateConflict.missingPrevDay1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const allowedNormal = isTodayOpenForExpenses
+                                    ? [todayStr, yesterdayStr]
+                                    : [yesterdayStr, twoDaysAgoStr];
+                                  if (!allowedNormal.includes(dateConflict.prevDay1)) {
+                                    setIsPastDateExpense(true);
+                                  }
+                                  setExpenseDate(dateConflict.prevDay1);
+                                }}
+                                className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 hover:text-white rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                              >
+                                اختيار تاريخ ({dateConflict.prevDay1})
+                              </button>
+                            )}
+                            {dateConflict.missingPrevDay2 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const allowedNormal = isTodayOpenForExpenses
+                                    ? [todayStr, yesterdayStr]
+                                    : [yesterdayStr, twoDaysAgoStr];
+                                  if (!allowedNormal.includes(dateConflict.prevDay2)) {
+                                    setIsPastDateExpense(true);
+                                  }
+                                  setExpenseDate(dateConflict.prevDay2);
+                                }}
+                                className="px-2.5 py-1 bg-white/5 hover:bg-white/10 border border-white/15 text-brand-dim hover:text-white rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                              >
+                                اختيار تاريخ ({dateConflict.prevDay2})
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -1826,6 +1957,90 @@ export default function OperationsClient({
                 </div>
               )
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Warning Modal when Previous Days (Yesterday / Day Before Yesterday) have no expenses */}
+      {showMissingDaysWarningModal && dateConflict && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[#05060f]/80 backdrop-blur-sm p-4 animate-fade-in text-right">
+          <div className="w-full max-w-md bg-brand-card border border-amber-500/40 rounded-[24px] shadow-2xl p-6 md:p-8 space-y-6 relative animate-scale-in">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-brand-border/20 pb-4">
+              <h3 className="text-base md:text-lg font-bold text-amber-400 flex items-center gap-2">
+                <AlertTriangle size={20} className="text-amber-400 shrink-0" />
+                <span>تنبيه: مصاريف أيام سابقة غير مضافة!</span>
+              </h3>
+            </div>
+
+            {/* Modal Body */}
+            <div className="space-y-4 text-xs md:text-sm leading-relaxed">
+              <p className="text-white/90">
+                أنت على وشك إغلاق مصاريف تاريخ{" "}
+                <span className="font-inter font-bold text-brand-accent dir-ltr">({expenseDate})</span>، ولكننا لاحظنا أنك{" "}
+                <strong className="text-amber-400">لم تقم بإضافة مصاريف</strong> للأيام التالية:
+              </p>
+
+              <div className="bg-amber-500/10 border border-amber-500/25 rounded-xl p-3.5 space-y-2">
+                {dateConflict.missingPrevDay1 && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-amber-300 font-bold">• اليوم السابق (أمس):</span>
+                    <span className="font-inter font-bold text-white dir-ltr">{dateConflict.prevDay1}</span>
+                  </div>
+                )}
+                {dateConflict.missingPrevDay2 && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-amber-300 font-bold">• اليوم الذي قبله:</span>
+                    <span className="font-inter font-bold text-white dir-ltr">{dateConflict.prevDay2}</span>
+                  </div>
+                )}
+              </div>
+
+              <p className="text-brand-dim text-xs">
+                هل أنت متأكد أنك تريد إغلاق مصاريف تاريخ{" "}
+                <span className="font-inter font-bold text-white dir-ltr">({expenseDate})</span> فعلاً، أم كنت تقصد إغلاق اليوم السابق؟
+              </p>
+            </div>
+
+            {/* Modal Footer Buttons */}
+            <div className="flex flex-col gap-2.5 pt-3 border-t border-brand-border/20">
+              {dateConflict.missingPrevDay1 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allowedNormal = isTodayOpenForExpenses
+                      ? [todayStr, yesterdayStr]
+                      : [yesterdayStr, twoDaysAgoStr];
+                    if (!allowedNormal.includes(dateConflict.prevDay1)) {
+                      setIsPastDateExpense(true);
+                    }
+                    setExpenseDate(dateConflict.prevDay1);
+                    setShowMissingDaysWarningModal(false);
+                  }}
+                  className="w-full py-3 px-4 bg-amber-500 hover:bg-amber-400 text-[#05060f] font-extrabold rounded-xl transition-all cursor-pointer text-xs shadow-lg active:scale-[0.98]"
+                >
+                  تغيير التاريخ إلى اليوم السابق ({dateConflict.prevDay1})
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={executeExpensesSubmission}
+                disabled={isPending}
+                className="w-full py-3 px-4 bg-brand-accent hover:bg-brand-accent/90 text-white font-bold rounded-xl transition-all cursor-pointer text-xs active:scale-[0.98] disabled:opacity-50"
+              >
+                نعم، متأكد وأريد إغلاق مصاريف ({expenseDate})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowMissingDaysWarningModal(false)}
+                disabled={isPending}
+                className="w-full py-2.5 px-4 bg-[#070814]/40 hover:bg-white/5 border border-brand-border/40 text-brand-dim hover:text-white rounded-xl transition-colors cursor-pointer text-xs"
+              >
+                إلغاء ومراجعة البيانات
+              </button>
+            </div>
           </div>
         </div>
       )}

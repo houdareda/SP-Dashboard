@@ -380,14 +380,24 @@ export async function getColleagues() {
  * Helper: Calculate date bounds in Egypt timezone (Africa/Cairo)
  */
 function getEgyptDateBounds() {
+  const now = new Date();
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Africa/Cairo",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   });
-  const todayStr = formatter.format(new Date());
-  const yesterdayStr = formatter.format(new Date(Date.now() - 86400000));
+  const hourFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Africa/Cairo",
+    hour: "2-digit",
+    hourCycle: "h23",
+  });
+  const currentHour = parseInt(hourFormatter.format(now), 10);
+  const isTodayOpen = currentHour >= 12; // Today's expenses only open at or after 12:00 PM (noon)
+
+  const todayStr = formatter.format(now);
+  const yesterdayStr = formatter.format(new Date(now.getTime() - 86400000));
+  const twoDaysAgoStr = formatter.format(new Date(now.getTime() - 2 * 86400000));
 
   const [y, m, d] = todayStr.split("-").map(Number);
   const targetDate = new Date(Date.UTC(y, m - 1 - 2, d));
@@ -397,26 +407,38 @@ function getEgyptDateBounds() {
   }
   const twoMonthsAgoStr = targetDate.toISOString().slice(0, 10);
 
-  return { todayStr, yesterdayStr, twoMonthsAgoStr };
+  return { todayStr, yesterdayStr, twoDaysAgoStr, twoMonthsAgoStr, isTodayOpen, currentHour };
 }
 
 /**
- * Action: Check whether an expense report or a pending expense request already exists for a given date
+ * Action: Check whether an expense report or a pending expense request already exists for a given date,
+ * and also check if the previous 2 days (yesterday & day before yesterday) have missing expenses.
  */
 export async function checkDateExpenseAvailability(dateStr: string) {
   try {
     const user = await getCurrentUser();
     if (!user || !dateStr) {
-      return { success: false, hasExistingExpense: false, hasPendingRequest: false };
+      return {
+        success: false,
+        hasExistingExpense: false,
+        hasPendingRequest: false,
+        prevDay1: "",
+        prevDay2: "",
+        missingPrevDay1: false,
+        missingPrevDay2: false,
+      };
     }
 
-    const [{ data: existingRecord }, { data: pendingRequests }] = await Promise.all([
+    const [y, m, d] = dateStr.split("-").map(Number);
+    const prevDay1 = new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
+    const prevDay2 = new Date(Date.UTC(y, m - 1, d - 2)).toISOString().slice(0, 10);
+
+    const [{ data: existingRecords }, { data: pendingRequests }] = await Promise.all([
       supabaseAdmin
         .from("daily_expenses")
-        .select("id")
+        .select("expense_date")
         .eq("agent_id", user.id)
-        .eq("expense_date", dateStr)
-        .maybeSingle(),
+        .in("expense_date", [dateStr, prevDay1, prevDay2]),
       supabaseAdmin
         .from("edit_expense_requests")
         .select("id, requested_changes")
@@ -424,18 +446,38 @@ export async function checkDateExpenseAvailability(dateStr: string) {
         .eq("status", "pending"),
     ]);
 
-    const hasPendingForDate = (pendingRequests || []).some(
-      (req: any) => req.requested_changes?.expense_date === dateStr
+    const existingDatesSet = new Set((existingRecords || []).map((r: any) => r.expense_date));
+    const pendingDatesSet = new Set(
+      (pendingRequests || [])
+        .map((r: any) => r.requested_changes?.expense_date)
+        .filter(Boolean)
     );
+
+    const hasExistingExpense = existingDatesSet.has(dateStr);
+    const hasPendingRequest = pendingDatesSet.has(dateStr);
+    const isPrevDay1Covered = existingDatesSet.has(prevDay1) || pendingDatesSet.has(prevDay1);
+    const isPrevDay2Covered = existingDatesSet.has(prevDay2) || pendingDatesSet.has(prevDay2);
 
     return {
       success: true,
-      hasExistingExpense: Boolean(existingRecord),
-      hasPendingRequest: hasPendingForDate,
+      hasExistingExpense,
+      hasPendingRequest,
+      prevDay1,
+      prevDay2,
+      missingPrevDay1: !isPrevDay1Covered,
+      missingPrevDay2: !isPrevDay2Covered,
     };
   } catch (err) {
     console.error("checkDateExpenseAvailability error:", err);
-    return { success: false, hasExistingExpense: false, hasPendingRequest: false };
+    return {
+      success: false,
+      hasExistingExpense: false,
+      hasPendingRequest: false,
+      prevDay1: "",
+      prevDay2: "",
+      missingPrevDay1: false,
+      missingPrevDay2: false,
+    };
   }
 }
 
@@ -467,18 +509,37 @@ export async function submitDailyExpenses(input: DailyExpensesInput, passwordCon
       return { success: false, error: "تاريخ التقرير مطلوب." };
     }
 
-    const { todayStr, yesterdayStr, twoMonthsAgoStr } = getEgyptDateBounds();
+    const { todayStr, yesterdayStr, twoDaysAgoStr, twoMonthsAgoStr, isTodayOpen } = getEgyptDateBounds();
+
+    // Enforce 12:00 PM (Noon) rule for today's expenses
+    if (expenseDate === todayStr && !isTodayOpen) {
+      return {
+        success: false,
+        error: `عذراً، لا يُفتح تسجيل مصاريف اليوم الحالي (${todayStr}) إلا بعد الساعة 12:00 ظهراً (بعد مرور 12 ساعة من بداية اليوم). يمكنك حالياً إغلاق مصاريف يوم أمس (${yesterdayStr}).`,
+      };
+    }
+
+    const maxAllowedDate = isTodayOpen ? todayStr : yesterdayStr;
 
     if (isPastDateRequest) {
-      if (expenseDate < twoMonthsAgoStr || expenseDate > todayStr) {
+      if (expenseDate < twoMonthsAgoStr || expenseDate > maxAllowedDate) {
         return {
           success: false,
-          error: `عذراً، يُسمح باختيار تاريخ سابق بحد أقصى شهرين من تاريخ اليوم (من ${twoMonthsAgoStr} إلى ${todayStr}).`,
+          error: `عذراً، يُسمح باختيار تاريخ سابق بحد أقصى شهرين من تاريخ اليوم (من ${twoMonthsAgoStr} إلى ${maxAllowedDate}).`,
         };
       }
     } else {
-      if (expenseDate !== todayStr && expenseDate !== yesterdayStr) {
-        return { success: false, error: "عذراً، يُسمح فقط باختيار تاريخ اليوم أو الأمس في الإغلاق المباشر." };
+      const allowedNormalDates = isTodayOpen
+        ? [todayStr, yesterdayStr]
+        : [yesterdayStr, twoDaysAgoStr];
+
+      if (!allowedNormalDates.includes(expenseDate)) {
+        return {
+          success: false,
+          error: isTodayOpen
+            ? "عذراً، يُسمح فقط باختيار تاريخ اليوم أو الأمس في الإغلاق المباشر."
+            : `عذراً، قبل الساعة 12:00 ظهراً يُسمح فقط بإغلاق مصاريف يوم أمس (${yesterdayStr}) أو اليوم السابق له (${twoDaysAgoStr}).`,
+        };
       }
     }
 
